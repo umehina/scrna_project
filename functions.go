@@ -1,0 +1,3 @@
+// functions.go
+
+package main
