@@ -122,3 +122,33 @@ func isMTGene(name string) bool {
 	// this should be faster than strings.HasPrefix
 	return (b0 == 'M' || b0 == 'm') && (b1 == 'T' || b1 == 't') && b2 == '-'
 }
+
+/* ----------
+Normalization Functions
+TODO: also implement concurrency here in the future
+TODO: find out the math behind normalization logic
+TODO: actually implement normalization logic
+*/
+
+// NormalizeCells normalizes the features of each cell in the input slice.
+// Input: slice of Cell pointers
+// Output: slice of normalized Cell pointers
+func NormalizeCells(cells []*Cell) []*Cell {
+	normalized := make([]*Cell, len(cells))
+
+	for i, c := range cells {
+		if c == nil {
+			continue
+		}
+
+		normalized[i] = c.Normalize()
+	}
+
+	return normalized
+}
+
+// TODO: implement normalization logic
+func (c *Cell) Normalize() *Cell {
+	// placeholder function
+	return c
+}
