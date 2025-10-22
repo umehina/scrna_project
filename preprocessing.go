@@ -15,14 +15,14 @@ Maybe after we learn about this in class.
 // Output: slice of Cell pointers corresponding to the provided indices
 func FilterCells(cells []*Cell, indices []int) []*Cell {
 	filtered := make([]*Cell, 0, len(indices))
-	for _, i := range indices {
+	for _, idx := range indices {
 		// skip out-of-bounds indices
-		if i < 0 || i >= len(cells) {
+		if idx < 0 || idx >= len(cells) {
 			continue
 		}
 
 		// append the cell at this index to the filtered slice
-		c := cells[i]
+		c := cells[idx]
 
 		// skip nil cells
 		// (?) i guess at this point we can even create a new func that checks for nil cells
@@ -43,7 +43,7 @@ func FilterCellIndices(cells []*Cell, minFeatures, maxFeatures, minCounts, maxCo
 	indices := make([]int, 0, len(cells))
 
 	// iterate through every cell and check if it passes the filters
-	for i, c := range cells {
+	for _, c := range cells {
 		if c == nil {
 			continue // skip nil cells
 		}
@@ -55,7 +55,7 @@ func FilterCellIndices(cells []*Cell, minFeatures, maxFeatures, minCounts, maxCo
 			m.nCountRNA >= minCounts &&
 			m.nCountRNA <= maxCounts &&
 			m.percentMT <= maxPercentMT {
-			indices = append(indices, i)
+			indices = append(indices, c.idx)
 		}
 	}
 	return indices
