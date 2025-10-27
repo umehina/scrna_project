@@ -74,7 +74,7 @@ func (c *Cell) CalcQCMetrics() {
 
 	// if features map is nil, set qcMetrics to zero values
 	if c.features == nil {
-		c.qcMetrics = QCMetrics{}
+		c.qcMetrics = &QCMetrics{}
 		return
 	}
 

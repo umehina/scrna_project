@@ -2,7 +2,7 @@
 
 package main
 
-type Dataset struct {
+type CountMatrix struct {
 	// ...
 	cells []*Cell
 	// ...
