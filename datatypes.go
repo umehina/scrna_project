@@ -2,12 +2,18 @@
 
 package main
 
+type Dataset struct {
+	// ...
+	cells []*Cell
+	// ...
+}
+
 type Cell struct {
 	// ...
 	idx       int
 	barcode   string
 	features  map[string]int
-	qcMetrics QCMetrics
+	qcMetrics *QCMetrics
 	// ...
 }
 
