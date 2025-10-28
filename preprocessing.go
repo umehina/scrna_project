@@ -61,67 +61,6 @@ func FilterCellIndices(cells []*Cell, minFeatures, maxFeatures, minCounts, maxCo
 	return indices
 }
 
-// CalcQCMetrics is a Cell method that calculates QC metrics for the cell.
-// Qinglin Kong - 10/21/2025
-// Input: a pointer to a Cell struct
-// Output: none (it updates the QCMetrics field of the Cell struct)
-func (c *Cell) CalcQCMetrics() {
-
-	// if cell is nil, do nothing
-	if c == nil {
-		return
-	}
-
-	// if features map is nil, set qcMetrics to zero values
-	if c.features == nil {
-		c.qcMetrics = &QCMetrics{}
-		return
-	}
-
-	// then we iterate through the features map for this cell to calculate the metrics
-	var nFeature, nCount, mtCount int
-	for gene, count := range c.features {
-		if count == 0 {
-			continue
-		}
-
-		nFeature++
-		nCount += count
-
-		if isMTGene(gene) {
-			mtCount += count
-		}
-	}
-
-	// apply the calculated metrics to the Cell struct
-	c.qcMetrics.nFeatureRNA = nFeature
-	c.qcMetrics.nCountRNA = nCount
-	if nCount > 0 {
-		c.qcMetrics.percentMT = float64(mtCount) / float64(nCount) // fraction 0..1
-	} else {
-		c.qcMetrics.percentMT = 0
-	}
-}
-
-// isMTGene checks if a gene is a mitochondrial gene based on its name prefix.
-// Qinglin Kong - 10/21/2025
-// Input: name string
-// Output: bool that is true if the gene is mitochondrial
-func isMTGene(name string) bool {
-	// if the name is shorter than 3 characters, it cannot be MT- or mt-
-	if len(name) < 3 {
-		return false
-	}
-
-	// extract the first three characters
-	b0 := name[0]
-	b1 := name[1]
-	b2 := name[2]
-
-	// check if the name starts with "MT-" or "mt-" and return the result
-	// this should be faster than strings.HasPrefix
-	return (b0 == 'M' || b0 == 'm') && (b1 == 'T' || b1 == 't') && b2 == '-'
-}
 
 /* ----------
 Normalization Functions
@@ -152,3 +91,4 @@ func (c *Cell) Normalize() *Cell {
 	// placeholder function
 	return c
 }
+

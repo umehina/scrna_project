@@ -32,5 +32,9 @@ func main() {
 		dataset.cells[0].qcMetrics.nFeatureRNA,
 		dataset.cells[0].qcMetrics.nCountRNA)
 
-	
+	indices := FilterCellIndices(dataset.cells, 200, 2500, 500, 15000, 0.05)
+	//filteredCells := FilterCells(dataset.cells, indices)
+
+	fmt.Println(len(indices))
+
 }
