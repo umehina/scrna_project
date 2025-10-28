@@ -2,69 +2,80 @@
 
 package main
 
+import "fmt"
+
 /* ----------
 QC Filtering Functions
 
-TODO: we should implement concurrency here if we want to speed this up for large datasets.
-Maybe after we learn about this in class.
+TODO: implement concurrency here
 */
 
-// FilterCells filter cells based on provided indices that identify which cells to keep.
-// Qinglin Kong - 10/21/2025
-// Input: slice of Cell pointers and slice of indices to keep
-// Output: slice of Cell pointers corresponding to the provided indices
-func FilterCells(cells []*Cell, indices []int) []*Cell {
-	filtered := make([]*Cell, 0, len(indices))
-	for _, idx := range indices {
-		// skip out-of-bounds indices
-		if idx < 0 || idx >= len(cells) {
-			continue
-		}
-
-		// append the cell at this index to the filtered slice
-		c := cells[idx]
-
-		// skip nil cells
-		// (?) i guess at this point we can even create a new func that checks for nil cells
-		if c == nil {
-			continue
-		}
-
-		filtered = append(filtered, c)
-	}
-	return filtered
+// (cm *CountMatrix) FilterByThresholds: the high-level QC filtering function that combines getting indices and filtering.
+// Qinglin Kong - 10/28/2025
+// Input: minFeatures, maxFeatures, minCounts, maxCounts, maxPercentMT
+// Output: *CountMatrix with cells that pass the filters
+func (cm *CountMatrix) FilterBy(minFeatures, maxFeatures, minCounts, maxCounts int, maxPercentMT float64) *CountMatrix {
+	indices := cm.getIndicesBy(minFeatures, maxFeatures, minCounts, maxCounts, maxPercentMT)
+	return cm.filterByIndices(indices)
 }
 
-// FilterCellIndices gets a list of cell indices that pass the QC filters.
+// (cm *CountMatrix) filterByIndices: filters the CountMatrix based on provided indices.
 // Qinglin Kong - 10/21/2025
-// Input: slice of Cell pointers and QC thresholds
-// Output: slice of indices of cells that pass the filters
-func FilterCellIndices(cells []*Cell, minFeatures, maxFeatures, minCounts, maxCounts int, maxPercentMT float64) []int {
-	indices := make([]int, 0, len(cells))
+// Input: slice of cell indices
+// Output: *CountMatrix with cells at those indices
+func (cm *CountMatrix) filterByIndices(indices []int) *CountMatrix {
+	if cm == nil || len(cm.cells) == 0 {
+		return &CountMatrix{}
+	}
 
-	// iterate through every cell and check if it passes the filters
-	for _, c := range cells {
+	// create a new CountMatrix to hold filtered cells
+	filtered := &CountMatrix{
+		cells: make([]*Cell, 0, len(indices)),
+	}
+
+	for _, idx := range indices {
+		if idx < 0 || idx >= len(cm.cells) {
+			continue // skip out-of-range indices
+		}
+		c := cm.cells[idx]
 		if c == nil {
 			continue // skip nil cells
 		}
+		// append cell to filtered CountMatrix
+		filtered.cells = append(filtered.cells, c)
+	}
 
-		// get the metrics for this cell
-		m := c.qcMetrics
-		if m.nFeatureRNA >= minFeatures &&
-			m.nFeatureRNA <= maxFeatures &&
-			m.nCountRNA >= minCounts &&
-			m.nCountRNA <= maxCounts &&
-			m.percentMT <= maxPercentMT {
+	return filtered
+}
+
+// (cm *CountMatrix) getIndicesWithin: gets indices of cells that pass the QC filters.
+// Qinglin Kong - 10/21/2025
+// Input: minFeatures, maxFeatures, minCounts, maxCounts, maxPercentMT
+// Output: slice of cell indices that pass the filters
+func (cm *CountMatrix) getIndicesBy(minFeatures, maxFeatures, minCounts, maxCounts int, maxPercentMT float64) []int {
+	if cm == nil || len(cm.cells) == 0 {
+		return nil
+	}
+
+	// collect indices of cells that pass the filters
+	indices := make([]int, 0, len(cm.cells))
+	for _, c := range cm.cells {
+		if c == nil || c.qcMetrics == nil {
+			continue
+		}
+
+		q := c.qcMetrics
+		if q.nFeatureRNA >= minFeatures && q.nFeatureRNA <= maxFeatures && q.nCountRNA >= minCounts && q.nCountRNA <= maxCounts && q.percentMT <= maxPercentMT {
+			// cell passes all filters, add its index to the slice
 			indices = append(indices, c.idx)
 		}
 	}
 	return indices
 }
 
-
 /* ----------
 Normalization Functions
-TODO: also implement concurrency here in the future
+TODO: also implement concurrency here
 TODO: find out the math behind normalization logic
 TODO: actually implement normalization logic
 */
@@ -72,23 +83,46 @@ TODO: actually implement normalization logic
 // NormalizeCells normalizes the features of each cell in the input slice.
 // Input: slice of Cell pointers
 // Output: slice of normalized Cell pointers
-func NormalizeCells(cells []*Cell) []*Cell {
-	normalized := make([]*Cell, len(cells))
-
-	for i, c := range cells {
-		if c == nil {
-			continue
-		}
-
-		normalized[i] = c.Normalize()
+func (cm *CountMatrix) Normalize() *CountMatrix {
+	if cm == nil || len(cm.cells) == 0 {
+		return &CountMatrix{}
 	}
+
+	normalized := &CountMatrix{
+		cells: make([]*Cell, 0, len(cm.cells)),
+	}
+
+	// ... normalization logic goes here ...
 
 	return normalized
 }
 
-// TODO: implement normalization logic
-func (c *Cell) Normalize() *Cell {
-	// placeholder function
-	return c
-}
+// Summary prints basic statistics of the CountMatrix.
+// Qinglin Kong - 10/28/2025
+// Input: none
+// Output: none
+func (cm *CountMatrix) Summary() {
+	if cm == nil || len(cm.cells) == 0 {
+		fmt.Println("CountMatrix is empty.")
+		return
+	}
 
+	totalCells := len(cm.cells)
+	totalFeatures := 0
+	totalCounts := 0
+	for _, c := range cm.cells {
+		if c == nil || c.qcMetrics == nil {
+			continue
+		}
+		totalFeatures += c.qcMetrics.nFeatureRNA
+		totalCounts += c.qcMetrics.nCountRNA
+	}
+
+	avgFeatures := float64(totalFeatures) / float64(totalCells)
+	avgCounts := float64(totalCounts) / float64(totalCells)
+
+	fmt.Println("CountMatrix Summary:")
+	fmt.Println("-> Total Cells:", totalCells)
+	fmt.Println("   -> Average Features per Cell:", int(avgFeatures))
+	fmt.Println("   -> Average Counts per Cell:", int(avgCounts))
+}
