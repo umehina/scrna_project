@@ -9,9 +9,8 @@ import (
 	"strconv"
 )
 
-// ParseCountMatrix reads a CSV where each row = cell barcode,
-// and columns = genes (float64 counts converted to int).
-func ParseCountMatrix(filename string) (*CountMatrix, error) {
+// ParseCountMatrixFromFile reads a CSV file and returns a CountMatrix.
+func ParseCountMatrixFromFile(filename string) (*CountMatrix, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %v", err)
@@ -21,21 +20,25 @@ func ParseCountMatrix(filename string) (*CountMatrix, error) {
 	reader := csv.NewReader(file)
 	reader.TrimLeadingSpace = true
 
-	// --- Header: Gene names ---
-	header, err := reader.Read()
+	return parseCountMatrix(reader)
+}
+
+// parseCountMatrix reads a CSV where each row = cell barcode,
+// and columns = genes (float64 counts converted to int).
+func parseCountMatrix(reader *csv.Reader) (*CountMatrix, error) {
+	// read header row
+	header, err := parseHeader(reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read header: %v", err)
+		return nil, err
 	}
-	if len(header) < 2 {
-		return nil, fmt.Errorf("expected at least one gene column")
-	}
-	genes := header[1:] // first column = barcode
+	genes := header[1:]
 
 	var dataset CountMatrix
-	cellIndex := 0
+	cellIdx := 0
 
-	// --- Rows: Each cell ---
+	// each for loop iteration reads one row (one cell)
 	for {
+		// read the next record
 		record, err := reader.Read()
 		if err == io.EOF {
 			break
@@ -44,92 +47,102 @@ func ParseCountMatrix(filename string) (*CountMatrix, error) {
 			return nil, fmt.Errorf("error reading row: %v", err)
 		}
 
-		if len(record) != len(header) {
-			return nil, fmt.Errorf("row length mismatch: expected %d, got %d", len(header), len(record))
+		// call helper to parse this record into a Cell struct
+		cell, err := parseCellRecord(record, genes, cellIdx)
+		if err != nil {
+			return nil, err
 		}
 
-		barcode := record[0]
-		features := make(map[string]int)
-		totalCount := 0
-
-		// --- Fixed version of parsing loop ---
-		for i, val := range record[1:] {
-			if val == "" {
-				continue
-			}
-			f, convErr := strconv.ParseFloat(val, 64)
-			if convErr != nil {
-				return nil, fmt.Errorf("invalid number at cell %s, gene %s: %v", barcode, genes[i], convErr)
-			}
-			count := int(f)
-			if count > 0 {
-				features[genes[i]] = count
-			}
-			totalCount += count
-		}
-
-		cell := &Cell{
-			idx:      cellIndex,
-			barcode:  barcode,
-			features: features,
-			qcMetrics: &QCMetrics{
-				nFeatureRNA: 0,
-				nCountRNA:   0,
-				percentMT:   0.0,
-			},
-		}
-
-		// Compute QC metrics for this cell
-		cell.CalcQCMetrics()
-
+		// append the cell to the dataset and increment index
 		dataset.cells = append(dataset.cells, cell)
-		cellIndex++
+		cellIdx++
 	}
 
 	return &dataset, nil
 }
 
+// parseHeader reads the header row from a CSV reader and returns the gene names.
+// Input: a pointer to a csv.Reader
+// Output: slice of gene names and error if any
+func parseHeader(reader *csv.Reader) ([]string, error) {
+	header, err := reader.Read()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read header: %v", err)
+	}
+	if len(header) < 2 {
+		return nil, fmt.Errorf("expected at least one gene column")
+	}
+	return header, nil
+}
 
-// CalcQCMetrics is a Cell method that calculates QC metrics for the cell.
+// parseCellRecord parses a single cell record from CSV and returns a Cell struct.
+// Input: slice of strings (CSV row), slice of gene names, cell index
+// Output: pointer to Cell struct and error if any
+func parseCellRecord(record []string, genes []string, idx int) (*Cell, error) {
+	if len(record) != len(genes)+1 {
+		return nil, fmt.Errorf("row length mismatch: expected %d, got %d", len(genes)+1, len(record))
+	}
+
+	barcode := record[0]
+	features := make(map[string]int)
+	totalCount := 0
+
+	for i, val := range record[1:] {
+		if val == "" {
+			continue
+		}
+		f, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid number at cell %s, gene %s: %v", barcode, genes[i], err)
+		}
+		count := int(f)
+		if count > 0 {
+			features[genes[i]] = count
+		}
+		totalCount += count
+	}
+
+	cell := &Cell{
+		idx:      idx,
+		barcode:  barcode,
+		features: features,
+		qcMetrics: &QCMetrics{
+			nFeatureRNA: len(features),
+			nCountRNA:   totalCount,
+		},
+	}
+
+	cell.calcPercentMT()
+	return cell, nil
+}
+
+// calcPercentMT is a Cell method that calculates the percentage of mitochondrial gene counts.
 // Qinglin Kong - 10/21/2025
 // Input: a pointer to a Cell struct
 // Output: none (it updates the QCMetrics field of the Cell struct)
-func (c *Cell) CalcQCMetrics() {
-
-	// if cell is nil, do nothing
-	if c == nil {
+func (c *Cell) calcPercentMT() {
+	if c == nil || c.features == nil || c.qcMetrics == nil {
 		return
 	}
+	// calculate and set the percentMT field
+	c.qcMetrics.percentMT = calcMTFraction(c.features, c.qcMetrics.nCountRNA)
+}
 
-	// if features map is nil, set qcMetrics to zero values
-	if c.features == nil {
-		c.qcMetrics = &QCMetrics{}
-		return
+// calcMTFraction calculates the fraction of mitochondrial gene counts.
+// Qinglin Kong - 10/21/2025
+// Input: features map and total counts nCount
+// Output: float64 fraction of mitochondrial gene counts
+func calcMTFraction(features map[string]int, nCount int) float64 {
+	if nCount == 0 {
+		return 0
 	}
-
-	// then we iterate through the features map for this cell to calculate the metrics
-	var nFeature, nCount, mtCount int
-	for gene, count := range c.features {
-		if count == 0 {
-			continue
-		}
-
-		nFeature++
-		nCount += count
-
-		if isMTGene(gene) {
+	mtCount := 0
+	for gene, count := range features {
+		if count > 0 && isMTGene(gene) {
 			mtCount += count
 		}
 	}
-
-	// apply the calculated metrics to the Cell struct
-	c.qcMetrics.nFeatureRNA = nFeature
-	c.qcMetrics.nCountRNA = nCount
-	if nCount > 0 {
-		c.qcMetrics.percentMT = float64(mtCount) / float64(nCount) // fraction 0..1
-	} else {
-		c.qcMetrics.percentMT = 0
-	}
+	return float64(mtCount) / float64(nCount)
 }
 
 // isMTGene checks if a gene is a mitochondrial gene based on its name prefix.

@@ -1,8 +1,9 @@
 package main
 
-
-import ("fmt"
-		"log")
+import (
+	"fmt"
+	"log"
+)
 
 func main() {
 	/* example usage (overall structure)
@@ -21,20 +22,20 @@ func main() {
 
 	*/
 
-	dataset, err := ParseCountMatrix("data/scRNA_dataset.csv")
+	dataset, err := ParseCountMatrixFromFile("data/scRNA_dataset.csv")
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 
-	fmt.Printf("Parsed %d cells.\n", len(dataset.cells))
-	fmt.Printf("Example cell: barcode=%s, nFeatures=%d, nCounts=%d\n",
-		dataset.cells[0].barcode,
-		dataset.cells[0].qcMetrics.nFeatureRNA,
-		dataset.cells[0].qcMetrics.nCountRNA)
-
 	indices := FilterCellIndices(dataset.cells, 200, 2500, 500, 15000, 0.05)
-	//filteredCells := FilterCells(dataset.cells, indices)
+	filteredCells := FilterCells(dataset.cells, indices)
 
-	fmt.Println(len(indices))
-
+	c := filteredCells[234]
+	fmt.Println("Number of Parsed cells:", len(dataset.cells))
+	fmt.Println("Number of filtered cells:", len(filteredCells))
+	fmt.Printf("Example cell:\n  Barcode:   %s\n  nFeatures: %d\n  nCounts:   %d\n  percentMT: %.2f%%\n",
+		c.barcode,
+		c.qcMetrics.nFeatureRNA,
+		c.qcMetrics.nCountRNA,
+		c.qcMetrics.percentMT)
 }
