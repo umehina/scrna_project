@@ -2,7 +2,8 @@
 
 package main
 
-import "fmt"
+import ("fmt"
+		"math")
 
 /* ----------
 QC Filtering Functions
@@ -84,18 +85,53 @@ TODO: actually implement normalization logic
 // Input: slice of Cell pointers
 // Output: slice of normalized Cell pointers
 func (cm *CountMatrix) Normalize() *CountMatrix {
-	if cm == nil || len(cm.cells) == 0 {
-		return &CountMatrix{}
-	}
+    if cm == nil || len(cm.cells) == 0 {
+        return &CountMatrix{}
+    }
 
-	normalized := &CountMatrix{
-		cells: make([]*Cell, 0, len(cm.cells)),
-	}
+    sizeFactors := cm.computeSizeFactors()
 
-	// ... normalization logic goes here ...
+    // Build per-gene data
+    geneCounts := map[string][]float64{}
+    for _, c := range cm.cells {
+        for gene, val := range c.features {
+            geneCounts[gene] = append(geneCounts[gene], float64(val))
+        }
+    }
 
-	return normalized
+    normalized := &CountMatrix{
+        cells: make([]*Cell, len(cm.cells)),
+    }
+
+    for gene, values := range geneCounts {
+        theta := estimateTheta(values)
+        beta0, beta1 := fitGeneCoefficients(values, sizeFactors)
+
+        // Update normalized counts
+        for j, c := range cm.cells {
+            if normalized.cells[j] == nil {
+                normalized.cells[j] = &Cell{
+                    idx:       c.idx,
+                    barcode:   c.barcode,
+                    features:  make(map[string]int),
+                    qcMetrics: c.qcMetrics,
+                }
+            }
+            // predicted mean
+            mu := math.Exp(beta0 + beta1*math.Log(sizeFactors[j]))
+            val := float64(c.features[gene])
+            residual := (val - mu) / math.Sqrt(mu+mu*mu/theta)
+            if math.IsNaN(residual) {
+                residual = 0
+            }
+            // scale up to integer space
+            normalized.cells[j].features[gene] = int(math.Round(residual * 1000))
+        }
+    }
+
+    return normalized
 }
+
 
 // Summary prints basic statistics of the CountMatrix.
 // Qinglin Kong - 10/28/2025
