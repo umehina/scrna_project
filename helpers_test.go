@@ -122,7 +122,7 @@ func TestFloatEqualsFromFile(t *testing.T) {
 			t.Fatalf("parse expected %d (%s): %v", idx, sb.name, err)
 		}
 		got := floatEquals(in[0], in[1], in[2])
-		want := exp[0] != false
+		want := exp[0]
 		if got != want {
 			t.Fatalf("case %d (%s): got %v want %v", idx, sb.name, got, want)
 		}
