@@ -2,8 +2,10 @@
 
 package main
 
-import ("fmt"
-		"math")
+import (
+	"fmt"
+	"math"
+)
 
 /* ----------
 QC Filtering Functions
@@ -81,57 +83,84 @@ TODO: find out the math behind normalization logic
 TODO: actually implement normalization logic
 */
 
-// NormalizeCells normalizes the features of each cell in the input slice.
-// Input: slice of Cell pointers
-// Output: slice of normalized Cell pointers
-func (cm *CountMatrix) Normalize() *CountMatrix {
-    if cm == nil || len(cm.cells) == 0 {
-        return &CountMatrix{}
-    }
+// Vania Halim - 11/1/2025
+// LogNormalize is a CountMatrix method that takes a scaleFactor float64 as input and modifies the CountMatrix in place, log normalizing each feature count
+func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
 
-    sizeFactors := cm.computeSizeFactors()
+	// range through each row (cell) in the counts matrix
+	for _, cell := range cm.cells {
+		// calculate total # features for that cell
+		totalCount := cell.CountTotalFeatures()
 
-    // Build per-gene data
-    geneCounts := map[string][]float64{}
-    for _, c := range cm.cells {
-        for gene, val := range c.features {
-            geneCounts[gene] = append(geneCounts[gene], float64(val))
-        }
-    }
+		// range through every feature/gene in the cell
+		for feature, count := range cell.features {
+			// scale the feature count and log normalize
+			norm := count / totalCount * scaleFactor
+			logNorm := math.Log1p(norm)
 
-    normalized := &CountMatrix{
-        cells: make([]*Cell, len(cm.cells)),
-    }
+			cell.features[feature] = logNorm
+		}
+	}
 
-    for gene, values := range geneCounts {
-        theta := estimateTheta(values)
-        beta0, beta1 := fitGeneCoefficients(values, sizeFactors)
-
-        // Update normalized counts
-        for j, c := range cm.cells {
-            if normalized.cells[j] == nil {
-                normalized.cells[j] = &Cell{
-                    idx:       c.idx,
-                    barcode:   c.barcode,
-                    features:  make(map[string]int),
-                    qcMetrics: c.qcMetrics,
-                }
-            }
-            // predicted mean
-            mu := math.Exp(beta0 + beta1*math.Log(sizeFactors[j]))
-            val := float64(c.features[gene])
-            residual := (val - mu) / math.Sqrt(mu+mu*mu/theta)
-            if math.IsNaN(residual) {
-                residual = 0
-            }
-            // scale up to integer space
-            normalized.cells[j].features[gene] = int(math.Round(residual * 1000))
-        }
-    }
-
-    return normalized
 }
 
+// Vania Halim - 11/1/2025
+// CountTotalFeatures is a *Cell method that returns the total feature count for the input cell
+func (cell *Cell) CountTotalFeatures() float64 {
+
+	var sum float64
+
+	for _, count := range cell.features {
+		sum += count
+	}
+
+	return sum
+
+}
+
+// Vania Halim - 11/1/2025
+// VarianceStabilizingTransform identifies features that are outliers on a mean variability plot. It takes as input the number of features to focus on per dataset as integer value nFeatures
+func (cm *CountMatrix) VarianceStabilizingTransform(nFeatures int, smoothingSpan float64) []string {
+
+	// safety check
+	if len(cm.cells) == 0 {
+		return nil
+	}
+
+	// compute mean and variance for each gene
+	genes := cm.FindAllGenes()
+	mu, dispersion := cm.ComputeMeanAndVariance(genes)
+
+	// fit LOESS trend (theta ~ mean)
+	// TODO: replace with Loess Go package function
+	expectedDispersion := LoessFit(mu, dispersion, smoothingSpan)
+
+	// Compute Residuals
+	residuals := ComputeResiduals(genes, expectedDispersion)
+
+	// Sort Residuals and return the first nFeatures genes
+	sortedGenes := SortResiduals(residuals)
+
+	if nFeatures > len(sortedGenes) {
+		nFeatures = len(sortedGenes)
+	}
+	return sortedGenes[:nFeatures]
+}
+
+// FindAllGenes returns a list of all genes as a string for a given CountMatrix
+// Vania Halim - 11/1/2025
+func (cm *CountMatrix) FindAllGenes() []string {
+
+	genes := make([]string, 0)
+
+	// assumes that the first cell contains a count for all genes
+	for gene := range cm.cells[0].features {
+		genes = append(genes, gene)
+	}
+
+	return genes
+
+}
 
 // Summary prints basic statistics of the CountMatrix.
 // Qinglin Kong - 10/28/2025
