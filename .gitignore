@@ -34,3 +34,4 @@ profile.cov
 # Editor/IDE
 # .idea/
 .vscode/
+.Rproj.user
