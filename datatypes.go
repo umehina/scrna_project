@@ -19,7 +19,7 @@ type Cell struct {
 }
 
 type QCMetrics struct {
-	nFeatureRNA int
-	nCountRNA   int
+	nFeatureRNA float64
+	nCountRNA   float64
 	percentMT   float64 // fraction 0..1
 }

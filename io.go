@@ -84,18 +84,17 @@ func parseCellRecord(record []string, genes []string, idx int) (*Cell, error) {
 	}
 
 	barcode := record[0]
-	features := make(map[string]int)
-	totalCount := 0
+	features := make(map[string]float64)
+	totalCount := 0.0
 
 	for i, val := range record[1:] {
 		if val == "" {
 			continue
 		}
-		f, err := strconv.ParseFloat(val, 64)
+		count, err := strconv.ParseFloat(val, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid number at cell %s, gene %s: %v", barcode, genes[i], err)
 		}
-		count := int(f)
 		if count > 0 {
 			features[genes[i]] = count
 		}
@@ -107,7 +106,7 @@ func parseCellRecord(record []string, genes []string, idx int) (*Cell, error) {
 		barcode:  barcode,
 		features: features,
 		qcMetrics: &QCMetrics{
-			nFeatureRNA: len(features),
+			nFeatureRNA: float64(len(features)),
 			nCountRNA:   totalCount,
 		},
 	}
@@ -132,17 +131,17 @@ func (c *Cell) calcPercentMT() {
 // Qinglin Kong - 10/21/2025
 // Input: features map and total counts nCount
 // Output: float64 fraction of mitochondrial gene counts
-func calcMTFraction(features map[string]int, nCount int) float64 {
+func calcMTFraction(features map[string]float64, nCount float64) float64 {
 	if nCount == 0 {
 		return 0
 	}
-	mtCount := 0
+	mtCount := 0.0
 	for gene, count := range features {
 		if count > 0 && isMTGene(gene) {
 			mtCount += count
 		}
 	}
-	return float64(mtCount) / float64(nCount)
+	return mtCount / nCount
 }
 
 // isMTGene checks if a gene is a mitochondrial gene based on its name prefix.

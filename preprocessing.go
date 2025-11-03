@@ -17,7 +17,7 @@ TODO: implement concurrency here
 // Qinglin Kong - 10/28/2025
 // Input: minFeatures, maxFeatures, minCounts, maxCounts, maxPercentMT
 // Output: *CountMatrix with cells that pass the filters
-func (cm *CountMatrix) FilterBy(minFeatures, maxFeatures, minCounts, maxCounts int, maxPercentMT float64) *CountMatrix {
+func (cm *CountMatrix) FilterBy(minFeatures, maxFeatures, minCounts, maxCounts, maxPercentMT float64) *CountMatrix {
 	indices := cm.getIndicesBy(minFeatures, maxFeatures, minCounts, maxCounts, maxPercentMT)
 	return cm.filterByIndices(indices)
 }
@@ -55,7 +55,7 @@ func (cm *CountMatrix) filterByIndices(indices []int) *CountMatrix {
 // Qinglin Kong - 10/21/2025
 // Input: minFeatures, maxFeatures, minCounts, maxCounts, maxPercentMT
 // Output: slice of cell indices that pass the filters
-func (cm *CountMatrix) getIndicesBy(minFeatures, maxFeatures, minCounts, maxCounts int, maxPercentMT float64) []int {
+func (cm *CountMatrix) getIndicesBy(minFeatures, maxFeatures, minCounts, maxCounts, maxPercentMT float64) []int {
 	if cm == nil || len(cm.cells) == 0 {
 		return nil
 	}
@@ -86,7 +86,6 @@ TODO: actually implement normalization logic
 // Vania Halim - 11/1/2025
 // LogNormalize is a CountMatrix method that takes a scaleFactor float64 as input and modifies the CountMatrix in place, log normalizing each feature count
 func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
-
 	// range through each row (cell) in the counts matrix
 	for _, cell := range cm.cells {
 		// calculate total # features for that cell
@@ -101,56 +100,51 @@ func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
 			cell.features[feature] = logNorm
 		}
 	}
-
 }
 
 // Vania Halim - 11/1/2025
 // CountTotalFeatures is a *Cell method that returns the total feature count for the input cell
 func (cell *Cell) CountTotalFeatures() float64 {
-
 	var sum float64
-
 	for _, count := range cell.features {
 		sum += count
 	}
-
 	return sum
-
 }
 
 // Vania Halim - 11/1/2025
 // VarianceStabilizingTransform identifies features that are outliers on a mean variability plot. It takes as input the number of features to focus on per dataset as integer value nFeatures
 func (cm *CountMatrix) VarianceStabilizingTransform(nFeatures int, smoothingSpan float64) []string {
+	// // safety check
+	// if len(cm.cells) == 0 {
+	// 	return nil
+	// }
 
-	// safety check
-	if len(cm.cells) == 0 {
-		return nil
-	}
+	// // compute mean and variance for each gene
+	// genes := cm.findAllGenes()
+	// mu, dispersion := cm.computeMeanAndVariance(genes)
 
-	// compute mean and variance for each gene
-	genes := cm.FindAllGenes()
-	mu, dispersion := cm.ComputeMeanAndVariance(genes)
+	// // fit LOESS trend (theta ~ mean)
+	// // TODO: replace with Loess Go package function
+	// expectedDispersion := loessFit(mu, dispersion, smoothingSpan)
 
-	// fit LOESS trend (theta ~ mean)
-	// TODO: replace with Loess Go package function
-	expectedDispersion := LoessFit(mu, dispersion, smoothingSpan)
+	// // compute Residuals
+	// residuals := computeResiduals(dispersion, expectedDispersion)
 
-	// Compute Residuals
-	residuals := ComputeResiduals(dispersion, expectedDispersion)
+	// // Sort Residuals and return the first nFeatures genes
+	// sortedGenes := sortResiduals(residuals)
 
-	// Sort Residuals and return the first nFeatures genes
-	sortedGenes := SortResiduals(residuals)
+	// if nFeatures > len(sortedGenes) {
+	// 	nFeatures = len(sortedGenes)
+	// }
 
-	if nFeatures > len(sortedGenes) {
-		nFeatures = len(sortedGenes)
-	}
-	return sortedGenes[:nFeatures]
+	// return sortedGenes[:nFeatures]
+	return nil // placeholder
 }
 
-// FindAllGenes returns a list of all genes as a string for a given CountMatrix
+// findAllGenes returns a list of all genes as a string for a given CountMatrix.
 // Vania Halim - 11/1/2025
-func (cm *CountMatrix) FindAllGenes() []string {
-
+func (cm *CountMatrix) findAllGenes() []string {
 	genes := make([]string, 0)
 
 	// assumes that the first cell contains a count for all genes
@@ -159,7 +153,6 @@ func (cm *CountMatrix) FindAllGenes() []string {
 	}
 
 	return genes
-
 }
 
 // Summary prints basic statistics of the CountMatrix.
@@ -173,8 +166,8 @@ func (cm *CountMatrix) Summary() {
 	}
 
 	totalCells := len(cm.cells)
-	totalFeatures := 0
-	totalCounts := 0
+	totalFeatures := 0.0
+	totalCounts := 0.0
 	for _, c := range cm.cells {
 		if c == nil || c.qcMetrics == nil {
 			continue
