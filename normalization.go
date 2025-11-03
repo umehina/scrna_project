@@ -5,6 +5,7 @@
 // 	"sort"
 // )
 
+<<<<<<< HEAD
 // // Fit a simple log-linear regression: log(y+1) = β0 + β1 * log(s)
 // func fitGeneCoefficients(values []float64, depth []float64) (float64, float64) {
 // 	x := make([]float64, len(values))
@@ -12,6 +13,34 @@
 
 // 	// populate x and logValues slices
 // 	for i := range values {
+=======
+// Fit a simple log-linear regression: log(y+1) = β0 + β1 * log(s)
+func fitGeneCoefficients(y []float64, s []float64) (float64, float64) {
+    x := make([]float64, len(y))
+    logY := make([]float64, len(y))
+    for j := range y {
+
+        if s[j] <= 0 {
+            s[j] = 1e-6
+        }
+
+        x[j] = math.Log(s[j])
+        logY[j] = math.Log(y[j] + 1)
+    }
+
+    meanX, meanY := mean(x), mean(logY)
+    var num, den float64
+	// estimate beta
+    for j := range y {
+        num += (x[j] - meanX) * (logY[j] - meanY)
+        den += (x[j] - meanX) * (x[j] - meanX)
+    }
+	
+    beta1 := num / den
+    beta0 := meanY - beta1*meanX
+    return beta0, beta1
+}
+>>>>>>> 2856ef7f0d60b05a458a12dac11553986dff9799
 
 // 		// safety for small values to avoid log(0)
 // 		if depth[i] <= 0 {

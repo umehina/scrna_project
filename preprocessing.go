@@ -136,7 +136,7 @@ func (cm *CountMatrix) VarianceStabilizingTransform(nFeatures int, smoothingSpan
 	expectedDispersion := LoessFit(mu, dispersion, smoothingSpan)
 
 	// Compute Residuals
-	residuals := ComputeResiduals(genes, expectedDispersion)
+	residuals := ComputeResiduals(dispersion, expectedDispersion)
 
 	// Sort Residuals and return the first nFeatures genes
 	sortedGenes := SortResiduals(residuals)
