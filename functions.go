@@ -8,8 +8,9 @@ import (
 )
 
 // Amy Ji - 11/05/2025
-// cmToDense takes as input a countMatrix and convert it into mat.Dense object usable by the gonum module (i.e. pca).
-func cmToDense(cm *CountMatrix) *mat.Dense {
+// cmToDense takes as input a countMatrix and convert it into mat.Matrix (*mat.Dense) object usable by many stat packages (i.e. pca,tSNE,UMAP)
+// NOTE: it builds a *mat.Dense internally, but returns a mat.Matrix interface type. 
+func cmToDense(cm *CountMatrix) mat.Matrix {
 	// findAllGenes is a countMatrix attribute (we defined this in preprocessing.go)
 	genes := cm.findAllGenes() // this returns a []string, in which each string is a gene name. 
 
@@ -29,3 +30,6 @@ func cmToDense(cm *CountMatrix) *mat.Dense {
 	}
 	return data
 }
+
+// Amy Ji - 11/05/2025
+func 
