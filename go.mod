@@ -9,6 +9,7 @@ require (
 	git.sr.ht/~sbinet/gg v0.7.0 // indirect
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
 	github.com/campoy/embedmd v1.0.0 // indirect
+	github.com/e-gun/go-tsne/tsne v0.0.0-20230417234659-5e6e23b13c15 // indirect
 	github.com/goccmack/gocc v1.0.2 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
