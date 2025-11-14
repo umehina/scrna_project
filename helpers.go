@@ -1,8 +1,8 @@
 package main
 
+// countTotalGenes is a *Cell method that returns the total feature count (genes) for the input cell
 // Vania Halim - 11/1/2025
-// CountTotalGenes is a *Cell method that returns the total feature count (genes) for the input cell
-func (cell *Cell) countTotalGenes() float64 {
+func (cell *Cell) CountTotalGenes() float64 {
 	var sum float64
 
 	for _, count := range cell.features {
@@ -17,7 +17,7 @@ func (cell *Cell) countTotalGenes() float64 {
 
 // FindAllGenes returns a list of all genes as strings for a given CountMatrix
 // Vania Halim - 11/1/2025
-func (cm *CountMatrix) findAllGenes() []string {
+func (cm *CountMatrix) FindAllGenes() []string {
 	genes := make([]string, 0)
 
 	// assumes that the first cell contains a count for all genes
@@ -30,7 +30,7 @@ func (cm *CountMatrix) findAllGenes() []string {
 
 // TotalGeneCounts returns the total number of observed counts for a given gene in a CountMatrix
 // Vania Halim - 11/13/2025
-func (em *ExpressionMatrix) geneTotals() []int {
+func (em *ExpressionMatrix) GeneTotals() []int {
 	// create output table of total count for that gene
 	numGenes := len(em.data[0]) // number of columns = # genes
 	numCells := len(em.data)    // number of rows = # cells
@@ -51,11 +51,11 @@ func (em *ExpressionMatrix) geneTotals() []int {
 
 // buildMatrix constructs an ExpressionMatrix from a CountMatrix. it puts cells as rows and genes as columns.
 // Qinglin Kong - 11/15/2025
-func buildMatrix(cm *CountMatrix) ExpressionMatrix {
+func BuildMatrix(cm *CountMatrix) ExpressionMatrix {
 	numCell := len(cm.cells)
 	data := make([][]float64, numCell)
 
-	genes := cm.findAllGenes()
+	genes := cm.FindAllGenes()
 	numGene := len(genes)
 
 	for i := 0; i < numCell; i++ {

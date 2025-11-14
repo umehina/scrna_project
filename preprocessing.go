@@ -90,7 +90,7 @@ func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
 	// range through each row (cell) in the counts matrix
 	for _, cell := range cm.cells {
 		// calculate total # features for that cell
-		totalCount := cell.countTotalGenes()
+		totalCount := cell.CountTotalGenes()
 
 		// range through every feature/gene in the cell
 		for feature, count := range cell.features {
