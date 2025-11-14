@@ -83,8 +83,8 @@ TODO: find out the math behind normalization logic
 TODO: actually implement normalization logic
 */
 
-// Vania Halim - 11/1/2025
 // LogNormalize is a CountMatrix method that takes a scaleFactor float64 as input and modifies the CountMatrix in place, log normalizing each feature count
+// Vania Halim - 11/1/2025
 func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
 
 	// range through each row (cell) in the counts matrix
@@ -92,13 +92,19 @@ func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
 		// calculate total # features for that cell
 		totalCount := cell.CountTotalGenes()
 
+		// if totalCount is 0, skip to avoid division by zero
+		if totalCount == 0 {
+			for feature := range cell.features {
+				cell.features[feature] = 0.0
+			}
+			continue
+		}
+
 		// range through every feature/gene in the cell
 		for feature, count := range cell.features {
 			// scale the feature count and log normalize
 			norm := count / totalCount * scaleFactor
-			logNorm := math.Log1p(norm)
-
-			cell.features[feature] = logNorm
+			cell.features[feature] = math.Log1p(norm)
 		}
 	}
 
