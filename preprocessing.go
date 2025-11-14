@@ -4,7 +4,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 )
 
 /* ----------
@@ -76,102 +75,11 @@ func (cm *CountMatrix) getIndicesBy(minFeatures, maxFeatures, minCounts, maxCoun
 	return indices
 }
 
-/* ----------
-Normalization Functions
-TODO: also implement concurrency here
-TODO: find out the math behind normalization logic
-TODO: actually implement normalization logic
-*/
-
-// LogNormalize is a CountMatrix method that takes a scaleFactor float64 as input and modifies the CountMatrix in place, log normalizing each feature count
-// Vania Halim - 11/1/2025
-func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
-	// range through each row (cell) in the counts matrix
-	for _, cell := range cm.cells {
-		// calculate total # features for that cell
-		totalCount := cell.CountTotalGenes()
-
-		// if totalCount is 0, skip to avoid division by zero
-		if totalCount == 0 {
-			for feature := range cell.features {
-				cell.features[feature] = 0.0
-			}
-			continue
-		}
-
-		// range through every feature/gene in the cell
-		for feature, count := range cell.features {
-			// scale the feature count and log normalize
-			norm := count / totalCount * scaleFactor
-			cell.features[feature] = math.Log1p(norm)
-		}
-	}
-
-}
-
-// LogNormalize normalizes the ExpressionMatrix using log normalization with a given scale factor.
-// This method first normalizes the data using counts per million (CPM) normalization and then applies the natural logarithm of one plus the value to each element.
-// Vania Halim - 11/1/2025, Qinglin Kong - 11/14/2025
-func (em *ExpressionMatrix) LogNormalize(scaleFactor float64) {
-	em.NormalizeCPM(scaleFactor)
-	em.Log1p()
-}
-
-// NormalizeCPM normalizes the ExpressionMatrix using counts per million normalization.
-// this is basically Vania's initial LogNormalize method for CountMatrix without the log step.
-// it is a reimplementation of Seurat's NormalizeData with normalization.method = "CPM" and scanpy's pp.normalize_total with target_sum=scaleFactor
-// Vania Halim - 11/1/2025, Qinglin Kong - 11/14/2025
-func (em *ExpressionMatrix) NormalizeCPM(scaleFactor float64) {
-	numCells := len(em.data)
-	if numCells == 0 {
-		return // empty matrix, nothing to do
-	}
-
-	numGenes := len(em.data[0])
-	cellTotals := em.CellTotals()
-
-	// range through each cell
-	for cell := 0; cell < numCells; cell++ {
-		// get total count for that cell
-		total := cellTotals[cell]
-		row := em.data[cell]
-
-		// avoid division by zero
-		if total == 0 {
-			for gene := 0; gene < numGenes; gene++ {
-				row[gene] = 0
-			}
-			continue
-		}
-
-		// range through every feature in the cell
-		factor := scaleFactor / total
-		for gene := 0; gene < numGenes; gene++ {
-			row[gene] *= factor
-		}
-	}
-}
-
-// Log1p applies the natural logarithm of one plus the value to each element in the ExpressionMatrix.
-// Vania Halim - 11/1/2025, Qinglin Kong - 11/14/2025
-func (em *ExpressionMatrix) Log1p() {
-	for cell := range em.data {
-		row := em.data[cell]
-		for gene := range row {
-			row[gene] = math.Log1p(row[gene])
-		}
-	}
-}
-
-// ===================== PEARSON RESIDUALS NORMALIZATION =========================
-
-// ===============================================================================
-
 // Summary prints basic statistics of the CountMatrix.
 // Qinglin Kong - 10/28/2025
 // Input: none
 // Output: none
-func (cm *CountMatrix) Summary() {
+func (cm *CountMatrix) ImportSummary() {
 	if cm == nil || len(cm.cells) == 0 {
 		fmt.Println("CountMatrix is empty.")
 		return
@@ -192,7 +100,7 @@ func (cm *CountMatrix) Summary() {
 	avgFeatures := float64(totalFeatures) / float64(totalCells)
 	avgCounts := float64(totalCounts) / float64(totalCells)
 
-	fmt.Println("CountMatrix Summary:")
+	fmt.Println("CountMatrix Import Summary:")
 	fmt.Println("-> Total Cells:", totalCells)
 	fmt.Println("   -> Average Features per Cell:", int(avgFeatures))
 	fmt.Println("   -> Average Counts per Cell:", int(avgCounts))

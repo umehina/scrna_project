@@ -10,16 +10,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
-	dataset.Summary()
+	dataset.ImportSummary()
 
 	// perform QC filtering
 	filtered := dataset.FilterBy(200, 2500, 500, 5000, 0.05)
-	filtered.Summary()
+	filtered.ImportSummary()
 
 	//perform normalization
 	// sf := 10000.0
 	// normalized := filtered.LogNormalize(sf)
-	// normalized.Summary()
 
 	// transform countMatrix to a *mat.Dense object
 	// MMatrix := cmToDense(normalized)
