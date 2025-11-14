@@ -31,14 +31,12 @@ func (cm *CountMatrix) FindAllGenes() []string {
 // GeneTotals returns the total number of observed counts for a given gene in a CountMatrix
 // Vania Halim - 11/13/2025
 func (em *ExpressionMatrix) GeneTotals() []float64 {
+	numCells := len(em.data) // number of rows = # cells
+	if numCells == 0 {
+		return nil // empty matrix, nothing to do
+	}
 	// create output table of total count for that gene
 	numGenes := len(em.data[0]) // number of columns = # genes
-	if numGenes == 0 {
-		return nil
-	}
-
-	numCells := len(em.data) // number of rows = # cells
-
 	geneTotals := make([]float64, numGenes)
 
 	// for each column, range through every row and save it in geneTotals
@@ -58,7 +56,7 @@ func (em *ExpressionMatrix) GeneTotals() []float64 {
 func (em *ExpressionMatrix) CellTotals() []float64 {
 	numCells := len(em.data)
 	if numCells == 0 {
-		return nil
+		return nil // empty matrix, nothing to do
 	}
 	numGenes := len(em.data[0])
 	cellTotals := make([]float64, numCells)
