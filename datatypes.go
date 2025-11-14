@@ -23,3 +23,8 @@ type QCMetrics struct {
 	nCountRNA   float64
 	percentMT   float64 // fraction 0..1
 }
+
+type ExpressionMatrix struct {
+	data  [][]float64
+	genes []string
+}

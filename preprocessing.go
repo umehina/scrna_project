@@ -108,7 +108,6 @@ func (cm *CountMatrix) LogNormalize(scaleFactor float64) *CountMatrix {
 // Vania Halim - 11/1/2025
 // CountTotalFeatures is a *Cell method that returns the total feature count for the input cell
 func (cell *Cell) CountTotalFeatures() float64 {
-
 	var sum float64
 
 	for _, count := range cell.features {
@@ -116,13 +115,11 @@ func (cell *Cell) CountTotalFeatures() float64 {
 	}
 
 	return sum
-
 }
 
 // FindAllGenes returns a list of all genes as a string for a given CountMatrix
 // Vania Halim - 11/1/2025
 func (cm *CountMatrix) FindAllGenes() []string {
-
 	genes := make([]string, 0)
 
 	// assumes that the first cell contains a count for all genes
@@ -131,7 +128,32 @@ func (cm *CountMatrix) FindAllGenes() []string {
 	}
 
 	return genes
+}
 
+// buildMatrix transforms the CountMatrix into a 2D slice of float64 values where each row is a cll and each column is a gene. It prepares data for normalization, scaling, and PCA etc.
+func buildMatrix(cm *CountMatrix) ExpressionMatrix {
+	var em ExpressionMatrix
+
+	numCell := len(cm.cells)
+	data := make([][]float64, numCell)
+
+	genes := cm.FindAllGenes()
+	numGene := len(genes)
+
+	for i := 0; i < numCell; i++ {
+		values := make([]float64, numGene)
+		cell := cm.cells[i]
+
+		for j, gene := range genes {
+			values[j] = cell.features[gene]
+		}
+
+		data[i] = values
+	}
+
+	em.data = data
+	em.genes = genes
+	return em
 }
 
 // Summary prints basic statistics of the CountMatrix.
