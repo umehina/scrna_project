@@ -35,3 +35,8 @@ profile.cov
 # .idea/
 .vscode/
 .Rproj.user
+
+.Rproj
+.Rhistory
+.RData
+.Ruserdata
