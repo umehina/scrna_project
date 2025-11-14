@@ -86,7 +86,6 @@ TODO: actually implement normalization logic
 // LogNormalize is a CountMatrix method that takes a scaleFactor float64 as input and modifies the CountMatrix in place, log normalizing each feature count
 // Vania Halim - 11/1/2025
 func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
-
 	// range through each row (cell) in the counts matrix
 	for _, cell := range cm.cells {
 		// calculate total # features for that cell
