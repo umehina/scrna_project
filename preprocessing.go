@@ -117,13 +117,20 @@ func (cell *Cell) CountTotalFeatures() float64 {
 	return sum
 }
 
+
+
 // FindAllGenes returns a list of all genes as a string for a given CountMatrix
 // Vania Halim - 11/1/2025
+<<<<<<< Updated upstream
 func (cm *CountMatrix) FindAllGenes() []string {
+=======
+func (cm *CountMatrix) FindAllGeneNames() []string {
+
+>>>>>>> Stashed changes
 	genes := make([]string, 0)
 
 	// assumes that the first cell contains a count for all genes
-	for gene := range cm.cells[0].features {
+	for gene := range cm.cells[0].featurses {
 		genes = append(genes, gene)
 	}
 
@@ -155,6 +162,23 @@ func buildMatrix(cm *CountMatrix) ExpressionMatrix {
 	em.genes = genes
 	return em
 }
+
+// ===================== PEARSON RESIDUSALS NORMALIZATION =========================
+
+// F
+
+
+
+
+
+
+
+
+
+
+// ===============================================================================
+
+
 
 // Summary prints basic statistics of the CountMatrix.
 // Qinglin Kong - 10/28/2025
