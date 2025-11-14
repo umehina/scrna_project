@@ -17,9 +17,9 @@ func main() {
 	filtered.Summary()
 
 	//perform normalization
-	sf := 10000.0
-	normalized := filtered.LogNormalize(sf)
-	normalized.Summary()
+	// sf := 10000.0
+	// normalized := filtered.LogNormalize(sf)
+	// normalized.Summary()
 
 	// transform countMatrix to a *mat.Dense object
 	// MMatrix := cmToDense(normalized)

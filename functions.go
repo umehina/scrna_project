@@ -11,7 +11,7 @@ import (
 // NOTE: it builds a *mat.Dense internally, but returns a mat.Matrix interface type.
 func cmToDense(cm *CountMatrix) *mat.Dense {
 	// findAllGenes is a countMatrix attribute (we defined this in preprocessing.go)
-	genes := cm.FindAllGeneNames() // this returns a []string, in which each string is a gene name.
+	genes := cm.FindAllGenes() // this returns a []string, in which each string is a gene name.
 
 	nCells := len(cm.cells)
 	nGenes := len(genes)
