@@ -85,12 +85,12 @@ TODO: actually implement normalization logic
 
 // Vania Halim - 11/1/2025
 // LogNormalize is a CountMatrix method that takes a scaleFactor float64 as input and modifies the CountMatrix in place, log normalizing each feature count
-func (cm *CountMatrix) LogNormalize(scaleFactor float64) *CountMatrix {
+func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
 
 	// range through each row (cell) in the counts matrix
 	for _, cell := range cm.cells {
 		// calculate total # features for that cell
-		totalCount := cell.CountTotalFeatures()
+		totalCount := cell.CountTotalGenes()
 
 		// range through every feature/gene in the cell
 		for feature, count := range cell.features {
@@ -101,13 +101,13 @@ func (cm *CountMatrix) LogNormalize(scaleFactor float64) *CountMatrix {
 			cell.features[feature] = logNorm
 		}
 	}
-	return cm
 
 }
 
 // Vania Halim - 11/1/2025
-// CountTotalFeatures is a *Cell method that returns the total feature count for the input cell
-func (cell *Cell) CountTotalFeatures() float64 {
+// CountTotalGenes is a *Cell method that returns the total feature count (genes) for the input cell
+func (cell *Cell) CountTotalGenes() float64 {
+
 	var sum float64
 
 	for _, count := range cell.features {
@@ -115,70 +115,53 @@ func (cell *Cell) CountTotalFeatures() float64 {
 	}
 
 	return sum
+
 }
 
+// TODO!
+// Create a method that returns the total per gene count
 
-
-// FindAllGenes returns a list of all genes as a string for a given CountMatrix
+// FindAllGenes returns a list of all genes as strings for a given CountMatrix
 // Vania Halim - 11/1/2025
-<<<<<<< Updated upstream
 func (cm *CountMatrix) FindAllGenes() []string {
-=======
-func (cm *CountMatrix) FindAllGeneNames() []string {
 
->>>>>>> Stashed changes
 	genes := make([]string, 0)
 
 	// assumes that the first cell contains a count for all genes
-	for gene := range cm.cells[0].featurses {
+	for gene := range cm.cells[0].features {
 		genes = append(genes, gene)
 	}
 
 	return genes
+
 }
 
-// buildMatrix transforms the CountMatrix into a 2D slice of float64 values where each row is a cll and each column is a gene. It prepares data for normalization, scaling, and PCA etc.
-func buildMatrix(cm *CountMatrix) ExpressionMatrix {
-	var em ExpressionMatrix
+// ===================== PEARSON RESIDUALS NORMALIZATION =========================
 
-	numCell := len(cm.cells)
-	data := make([][]float64, numCell)
+// TotalGeneCounts returns the total number of observed counts for a given gene in a CountMatrix
+// Vania Halim - 11/13/2025
+func (em *ExpressionMatrix) GeneTotals() []int {
+	// create output table of total count for that gene
+	numGenes := len(*em[0]) // number of columns = # genes
+	numCells := len(*em)    // number of rows = # cells
 
-	genes := cm.FindAllGenes()
-	numGene := len(genes)
+	geneTotals := make([]int, numGenes)
 
-	for i := 0; i < numCell; i++ {
-		values := make([]float64, numGene)
-		cell := cm.cells[i]
-
-		for j, gene := range genes {
-			values[j] = cell.features[gene]
+	// for each column, range through every row and save it in geneTotals
+	for gene, geneCount := range numGenes {
+		sum := 0
+		for cell, cellCount := range numCells {
+			sum += *em[cell][gene]
 		}
-
-		data[i] = values
+		geneTotals[gene] = sum
 	}
 
-	em.data = data
-	em.genes = genes
-	return em
+	return geneTotals
 }
 
-// ===================== PEARSON RESIDUSALS NORMALIZATION =========================
-
-// F
-
-
-
-
-
-
-
-
-
+// Tot
 
 // ===============================================================================
-
-
 
 // Summary prints basic statistics of the CountMatrix.
 // Qinglin Kong - 10/28/2025

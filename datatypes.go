@@ -13,7 +13,7 @@ type Cell struct {
 	// ...
 	idx       int
 	barcode   string
-	features  map[string]float64
+	features  map[string]float64 // genes
 	qcMetrics *QCMetrics
 	// ...
 }
@@ -22,9 +22,4 @@ type QCMetrics struct {
 	nFeatureRNA float64
 	nCountRNA   float64
 	percentMT   float64 // fraction 0..1
-}
-
-type ExpressionMatrix struct {
-	data  [][]float64
-	genes []string
 }
