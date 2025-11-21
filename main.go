@@ -36,4 +36,11 @@ func main() {
 	// 	panic(err1)
 	// }
 
+	// ================ PEARSON NORMALIZATION ==================
+	em := filtered.buildMatrix()
+	normalized := em.Pearson(filtered, 100)
+
+	// print first 5
+	normalized.PearsonSummarize(10)
+
 }

@@ -1,5 +1,52 @@
 package main
 
+import "fmt"
+
+// PearsonSummarize takes as input a number of rows as integer
+// It prints the first n genes for the first cell of the normalized *ExpressionMatrix
+// Vania Halim - 11/20/2025
+func (em *ExpressionMatrix) PearsonSummarize(n int) {
+
+	for c := range em.data[0] {
+
+		for g := range em.data[:n] {
+
+			fmt.Println(em.genes[c])
+			fmt.Println(em.data[c][g])
+		}
+
+	}
+}
+
+// InitializeExpressionMatrix takes as input the number of cells and genes as an integer
+// Vania Halim - 11/20/2025
+func InitializeExpressionMatrix(numCells, numGenes int) *ExpressionMatrix {
+
+	// initialize output ExpressionMatrix
+	var normalized ExpressionMatrix
+	normalized.data = make([][]float64, numCells)
+	for i := range numCells {
+		normalized.data[i] = make([]float64, numGenes)
+	}
+
+	return &normalized
+
+}
+
+// TotalCounts is a *CountMatrix Method that returns the total number of observed counts for all cells in the matrix
+// Vania Halim - 11/20/2025
+func (cm *CountMatrix) TotalCounts() float64 {
+
+	var totalCount float64
+
+	for _, currCell := range cm.cells {
+		totalCount += currCell.qcMetrics.nFeatureRNA
+	}
+
+	return totalCount
+
+}
+
 // countTotalGenes is a *Cell method that returns the total feature count (genes) for the input cell
 // Vania Halim - 11/1/2025
 func (cell *Cell) CountTotalGenes() float64 {
