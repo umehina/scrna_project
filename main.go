@@ -45,4 +45,12 @@ func main() {
 	_ = proj // just so we can graph/plot it later on.
 	PlotPCA2D(proj, "pca.png")
 
+	// ================ PEARSON NORMALIZATION ==================
+	em, numCells, numGenes := BuildMatrix(filtered)
+
+	normalized := em.Pearson(filtered, numCells, numGenes, 100)
+
+	// print first 5
+	normalized.PearsonSummarize(10)
+
 }
