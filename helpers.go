@@ -6,15 +6,29 @@ import "fmt"
 // It prints the first n genes for the first cell of the normalized *ExpressionMatrix
 // Vania Halim - 11/20/2025
 func (em *ExpressionMatrix) PearsonSummarize(n int) {
+	// Defensive checks to avoid panics
+	if len(em.data) == 0 || len(em.genes) == 0 {
+		return
+	}
+	if len(em.data[0]) == 0 {
+		return
+	}
 
 	fmt.Println("Pearson Residuals Summary:")
 
-	for g := range n {
-
-		fmt.Println("-> ", em.genes[g], "count: ", em.data[0][g])
-
+	maxGenes := len(em.genes)
+	maxData := len(em.data[0])
+	limit := n
+	if limit > maxGenes {
+		limit = maxGenes
+	}
+	if limit > maxData {
+		limit = maxData
 	}
 
+	for g := 0; g < limit; g++ {
+		fmt.Println("-> ", em.genes[g], "count: ", em.data[0][g])
+	}
 }
 
 // InitializeExpressionMatrix takes as input the number of cells and genes as an integer
