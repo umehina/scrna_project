@@ -3,9 +3,12 @@
 package main
 
 import (
+	"fmt"
 	//"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
+	"gonum.org/v1/gonum/stat"
 	"github.com/e-gun/go-tsne/tsne"
+
 
 )
 
@@ -35,9 +38,11 @@ func cmToDense(cm *CountMatrix) *mat.Dense {
 
 //Yinan Elise Zhu - 11/06/2025 
 //implementing tSNE using Gonum
-
+// https://pkg.go.dev/github.com/e-gun/go-tsne/tsne
 func RunTSNE(data *mat.Dense, perplexity float64, iterations int) *mat.Dense {
-
+	if data == nil {
+		panic("RunUMAP: data matrix is nil")
+	}
     outDims := 2 //change as an input 
     learningRate := 200.0
 
@@ -50,36 +55,32 @@ func RunTSNE(data *mat.Dense, perplexity float64, iterations int) *mat.Dense {
     return embedding.(*mat.Dense)
 }
 
-
-//Yinan Elise Zhu - 11/06/2025, 11/13/2025 
-//implementing UMAP using Gonum
-// RunUMAP runs UMAP dimensionality reduction on a *mat.Dense matrix
-// data: input matrix of shape (n_samples × n_features)
-// nNeighbors: number of neighboring points used in local approximations (5–50)
-// minDist: controls how tightly points are packed together ( 0.0–0.5)
-
-func RunUMAP(data *mat.Dense, nNeighbors int, minDist float64) *mat.Dense {
-	
-	// Basic sanity checks 
+// Amy Ji - 11/12/2025
+// Implementing PCA using func PC in gonum.stats
+func RunPCA(data *mat.Dense, k int) *mat.Dense {
 	if data == nil {
-		panic("RunUMAP: data matrix is nil")
+		panic("RunPCA: data matrix is nil")
 	}
+	_,d := data.Dims()
+	var pc stat.PC
+	ok := pc.PrincipalComponents(data, nil)
+	if !ok {
+		panic("PCA computation failed")
+	}
+	fmt.Printf("variance=%.4f\n\n",pc.VarsTo(nil))
 
-	// Define the number of output dimensions for visualization (typically 2D)
-	outDims := 2 //change as an input
-
-	// Create a new UMAP model using the chosen hyperparameters:
-	//   outDims = target embedding dimension (2D)
-	//   nNeighbors = number of neighboring points
-	//   minDist = minimum distance between points in the embedding
-	umapModel := umap.NewUMAP(outDims, nNeighbors, minDist)
-
-	// Fit the model on the input data and obtain the 2D embedding
-	//   data = input matrix (*mat.Dense)
-	// The result is a *mat.Dense (n_samples × outDims) containing the 2D coordinates
-	embedding := umapModel.EmbedData(data)
-
-	// Return the computed low-dimensional embedding
-	return embedding.(*mat.Dense)
+	// Get eigenvectors (loadings); 
+	// vec is d*d eigenvectors in columns
+	var vec mat.Dense 
+	pc.VectorsTo(&vec)
+	// Project data (n*d) onto the first k principle components.
+	// d*k --> n*k
+	var proj mat.Dense
+	proj.Mul(data, vec.Slice(0,d,0,k))
+	fmt.Printf("proj=\n%v\n", mat.Formatted(&proj, mat.Prefix(" ")))
+	return   &proj
 }
+
+
+
 
