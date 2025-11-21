@@ -40,7 +40,7 @@ func (cm *CountMatrix) TotalCounts() float64 {
 	var totalCount float64
 
 	for _, currCell := range cm.cells {
-		totalCount += currCell.qcMetrics.nFeatureRNA
+		totalCount += currCell.qcMetrics.nCountRNA
 	}
 
 	return totalCount
