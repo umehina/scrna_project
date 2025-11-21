@@ -27,7 +27,6 @@ func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
 			cell.features[feature] = math.Log1p(norm)
 		}
 	}
-
 }
 
 // LogNormalize normalizes the ExpressionMatrix using log normalization with a given scale factor.

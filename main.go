@@ -19,12 +19,13 @@ func main() {
 	//filtered.Summary()
 
 	//perform normalization
-	sf := 10000.0
-	normalized := filtered.LogNormalize(sf)
-	//normalized.Summary()
+	sff := 10000.00
+	// LogNormalize modifies 'filtered' in place and does not return a value, so call it directly.
+	filtered.LogNormalize(sff)
+	//filtered.Summary()
 
 	// transform countMatrix to a *mat.Dense object
-	MMatrix := cmToDense(normalized)
+	MMatrix := CmToDense(filtered)
 	// =================== TSNE ============================
 	// Amy Ji - 11/13/2025
 	// Define perplexity and iterations for RunTSNE
