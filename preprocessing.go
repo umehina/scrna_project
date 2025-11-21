@@ -75,6 +75,37 @@ func (cm *CountMatrix) getIndicesBy(minFeatures, maxFeatures, minCounts, maxCoun
 	return indices
 }
 
+/* ----------
+Normalization Functions
+TODO: also implement concurrency here
+TODO: find out the math behind normalization logic
+TODO: actually implement normalization logic
+*/
+
+// buildMatrix constructs an ExpressionMatrix from a CountMatrix. it puts cells as rows and genes as columns.
+// Qinglin Kong - 11/15/2025
+func (cm *CountMatrix) buildMatrix() *ExpressionMatrix {
+	numCell := len(cm.cells)
+	data := make([][]float64, numCell)
+
+	genes := cm.FindAllGenes()
+	numGene := len(genes)
+
+	for i := 0; i < numCell; i++ {
+		values := make([]float64, numGene)
+		cell := cm.cells[i]
+
+		for j, gene := range genes {
+			values[j] = cell.features[gene]
+		}
+
+		data[i] = values
+	}
+
+	return &ExpressionMatrix{data: data, genes: genes}
+}
+
+// ===============================================================================
 // Summary prints basic statistics of the CountMatrix.
 // Qinglin Kong - 10/28/2025
 // Input: none
@@ -100,7 +131,7 @@ func (cm *CountMatrix) ImportSummary() {
 	avgFeatures := float64(totalFeatures) / float64(totalCells)
 	avgCounts := float64(totalCounts) / float64(totalCells)
 
-	fmt.Println("CountMatrix Import Summary:")
+	fmt.Println("CountMatrix Summary:")
 	fmt.Println("-> Total Cells:", totalCells)
 	fmt.Println("   -> Average Features per Cell:", int(avgFeatures))
 	fmt.Println("   -> Average Counts per Cell:", int(avgCounts))
