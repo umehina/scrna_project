@@ -1,5 +1,66 @@
 package main
 
+import "fmt"
+
+// PearsonSummarize takes as input a number of rows as integer
+// It prints the first n genes for the first cell of the normalized *ExpressionMatrix
+// Vania Halim - 11/20/2025
+func (em *ExpressionMatrix) PearsonSummarize(n int) {
+	// Defensive checks to avoid panics
+	if len(em.data) == 0 || len(em.genes) == 0 {
+		return
+	}
+	if len(em.data[0]) == 0 {
+		return
+	}
+
+	fmt.Println("Pearson Residuals Summary:")
+
+	maxGenes := len(em.genes)
+	maxData := len(em.data[0])
+	limit := n
+	if limit > maxGenes {
+		limit = maxGenes
+	}
+	if limit > maxData {
+		limit = maxData
+	}
+
+	for g := 0; g < limit; g++ {
+		fmt.Println("-> ", em.genes[g], "count: ", em.data[0][g])
+	}
+}
+
+// InitializeExpressionMatrix takes as input the number of cells and genes as an integer
+// Vania Halim - 11/20/2025
+func InitializeExpressionMatrix(numCells, numGenes int) *ExpressionMatrix {
+
+	// initialize output ExpressionMatrix
+
+	data := make([][]float64, numCells)
+
+	for i := range data {
+		data[i] = make([]float64, numGenes)
+	}
+
+	return &ExpressionMatrix{data: data}
+
+}
+
+// TotalCounts is a *CountMatrix Method that returns the total number of observed counts for all cells in the matrix
+// Vania Halim - 11/20/2025
+func (cm *CountMatrix) TotalCounts() float64 {
+
+	var totalCount float64
+
+	for _, currCell := range cm.cells {
+		totalCount += currCell.qcMetrics.nCountRNA
+	}
+
+	return totalCount
+
+}
+
 // countTotalGenes is a *Cell method that returns the total feature count (genes) for the input cell
 // Vania Halim - 11/1/2025
 func (cell *Cell) CountTotalGenes() float64 {
@@ -75,7 +136,7 @@ func (em *ExpressionMatrix) CellTotals() []float64 {
 
 // buildMatrix constructs an ExpressionMatrix from a CountMatrix. it puts cells as rows and genes as columns.
 // Qinglin Kong - 11/15/2025
-func BuildMatrix(cm *CountMatrix) ExpressionMatrix {
+func BuildMatrix(cm *CountMatrix) (ExpressionMatrix, int, int) {
 	numCell := len(cm.cells)
 	data := make([][]float64, numCell)
 
@@ -93,5 +154,5 @@ func BuildMatrix(cm *CountMatrix) ExpressionMatrix {
 		data[i] = values
 	}
 
-	return ExpressionMatrix{data: data, genes: genes}
+	return ExpressionMatrix{data: data, genes: genes}, numCell, numGene
 }

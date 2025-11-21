@@ -36,4 +36,12 @@ func main() {
 	// 	panic(err1)
 	// }
 
+	// ================ PEARSON NORMALIZATION ==================
+	em, numCells, numGenes := BuildMatrix(filtered)
+
+	normalized := em.Pearson(filtered, numCells, numGenes, 100)
+
+	// print first 5
+	normalized.PearsonSummarize(10)
+
 }
