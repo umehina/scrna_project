@@ -3,6 +3,7 @@ module umemiya.me/cmu/02601/scango
 go 1.25.0
 
 require (
+	github.com/e-gun/go-tsne/tsne v0.0.0-20230417234659-5e6e23b13c15
 	gonum.org/v1/gonum v0.16.0
 	gonum.org/v1/plot v0.16.0
 )
