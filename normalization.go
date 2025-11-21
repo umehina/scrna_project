@@ -1,65 +1,91 @@
 package main
 
-import "math"
+import (
+	"math"
+)
 
 // ===================== PEARSON RESIDUALS NORMALIZATION =========================
+
+// TODO: make sure the outputted results make sense, do hand calculation
+// TODO: change pearson summary to output several rows
 
 // Pearson takes as input a non-normalized ExpressionMatrix and the input countsMatrix
 // returns a pointer to a new ExpressionMatrix where the values are the Pearson residuals of the observed counts
 // Vania Halim 11/20/2025
-func (em *ExpressionMatrix) Pearson(cm *CountMatrix, theta float64) *ExpressionMatrix {
+func (em *ExpressionMatrix) Pearson(cm *CountMatrix, numCells, numGenes int, theta float64) *ExpressionMatrix {
 	// initialize output ExpressionMatrix
-	normalized := ExpressionMatrix{genes: em.genes}
+	//normalized := &ExpressionMatrix{genes: em.genes}
+	normalized := InitializeExpressionMatrix(numCells, numGenes)
+	normalized.genes = em.genes
 
 	// create the expected value matrix
-	expected := em.Expected(cm)
+	expected := em.Expected(cm, numCells, numGenes)
 
 	// range through the input and expected matrix, updating the output matrix
 	// PR = (X_cg - u_cg)/sqrt(u_cg + (u_cg^2)/theta)
-	for c := range em.data {
-		for g := range em.data[c] {
+	for c := range numCells {
+		for g := range numGenes {
 
-			expectedCount := expected.data[c][g]
+			// bounds safety checks
+			if c >= len(em.data) || g >= len(em.data[0]) {
+				continue
+			}
+			if c >= len(expected.data) || g >= len(expected.data[0]) {
+				continue
+			}
+
 			observedCount := em.data[c][g]
+			expectedCount := expected.data[c][g]
 
 			numerator := observedCount - expectedCount
-			denominator := math.Sqrt((expectedCount * expectedCount) / theta)
+			denominator := math.Sqrt(expectedCount + ((expectedCount * expectedCount) / theta))
 
-			normalized.data[c][g] = numerator / denominator
+			// avoid division by zero
+			if denominator == 0 {
+				normalized.data[c][g] = 0
+			} else {
+				normalized.data[c][g] = numerator / denominator
+			}
 
 		}
 	}
 
-	return &normalized
+	return normalized
 }
 
 // Expected returns the expected value matrix for a given ExpressionMatrix
 // It takes as input the total counts, computed from the countx matrix
 // mu_cg = (n_c x T_g)T
 
-func (em *ExpressionMatrix) Expected(cm *CountMatrix) *ExpressionMatrix {
+func (em *ExpressionMatrix) Expected(cm *CountMatrix, numCells, numGenes int) *ExpressionMatrix {
 
 	geneTotals := em.GeneTotals() // list of gene totals for all cells
 	totalCounts := cm.TotalCounts()
 
 	// create output expression matrix with the same genes as em
-	expectedMatrix := ExpressionMatrix{genes: em.genes}
+	//expectedMatrix := &ExpressionMatrix{genes: em.genes}
+	expectedMatrix := InitializeExpressionMatrix(numCells, numGenes)
+	expectedMatrix.genes = em.genes
 
 	// range through all cells
-	for c := range em.data {
+	for c := range numCells {
 		// range through all genes
-		for g := range em.data[c] {
+		for g := range numGenes {
 
 			// compute expected count of the cell and assign to current expectedMatrix input
+			if c >= len(cm.cells) || g >= len(geneTotals) {
+				continue
+			}
+
 			currCell := cm.cells[c]
 			cellTotal := currCell.qcMetrics.nCountRNA
-			geneTotal := geneTotals[c]
+			geneTotal := geneTotals[g]
 
 			expectedMatrix.data[c][g] = (cellTotal * geneTotal) / totalCounts
 		}
 	}
 
-	return &expectedMatrix
+	return expectedMatrix
 
 }
 

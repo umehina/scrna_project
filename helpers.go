@@ -7,15 +7,14 @@ import "fmt"
 // Vania Halim - 11/20/2025
 func (em *ExpressionMatrix) PearsonSummarize(n int) {
 
-	for c := range em.data[0] {
+	fmt.Println("Pearson Residuals Summary:")
 
-		for g := range em.data[:n] {
+	for g := range n {
 
-			fmt.Println(em.genes[c])
-			fmt.Println(em.data[c][g])
-		}
+		fmt.Println("-> ", em.genes[g], "count: ", em.data[0][g])
 
 	}
+
 }
 
 // InitializeExpressionMatrix takes as input the number of cells and genes as an integer
@@ -23,13 +22,14 @@ func (em *ExpressionMatrix) PearsonSummarize(n int) {
 func InitializeExpressionMatrix(numCells, numGenes int) *ExpressionMatrix {
 
 	// initialize output ExpressionMatrix
-	var normalized ExpressionMatrix
-	normalized.data = make([][]float64, numCells)
-	for i := range numCells {
-		normalized.data[i] = make([]float64, numGenes)
+
+	data := make([][]float64, numCells)
+
+	for i := range data {
+		data[i] = make([]float64, numGenes)
 	}
 
-	return &normalized
+	return &ExpressionMatrix{data: data}
 
 }
 
@@ -122,7 +122,7 @@ func (em *ExpressionMatrix) CellTotals() []float64 {
 
 // buildMatrix constructs an ExpressionMatrix from a CountMatrix. it puts cells as rows and genes as columns.
 // Qinglin Kong - 11/15/2025
-func BuildMatrix(cm *CountMatrix) ExpressionMatrix {
+func BuildMatrix(cm *CountMatrix) (ExpressionMatrix, int, int) {
 	numCell := len(cm.cells)
 	data := make([][]float64, numCell)
 
@@ -140,5 +140,5 @@ func BuildMatrix(cm *CountMatrix) ExpressionMatrix {
 		data[i] = values
 	}
 
-	return ExpressionMatrix{data: data, genes: genes}
+	return ExpressionMatrix{data: data, genes: genes}, numCell, numGene
 }
