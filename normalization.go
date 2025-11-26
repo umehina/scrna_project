@@ -170,7 +170,7 @@ func (em *ExpressionMatrix) Log1p() {
 	}
 }
 
-// Scale standardizes the ExpressionMatrix by scaling each gene to have mean 0 and standard deviation 1, with optional clipping of extreme values.
+// ScaleData standardizes the ExpressionMatrix by centering and scaling each gene (column). Each gene's values are transformed to have a mean of 0 and a standard deviation of 1. The method has a clip which the default is set to 10 based on Seurat's implementation.
 // Qinglin Kong - 11/26/2025
 func (em *ExpressionMatrix) ScaleData(clip float64) {
 	// get num of cells/genes and return if empty
@@ -191,8 +191,9 @@ func (em *ExpressionMatrix) ScaleData(clip float64) {
 			vals[c] = em.data[c][g]
 		}
 
-		// compute mean and sd
-		mean, sd := meanSD(vals)
+		// Compute mean and standard deviation of this gene
+		mean := Mean(vals)
+		sd := Std(Variance(vals, mean))
 
 		// avoid division by zero
 		if sd == 0 {
@@ -203,23 +204,22 @@ func (em *ExpressionMatrix) ScaleData(clip float64) {
 			continue // move to next gene
 		}
 
-		// go through each cell again and scale the value
 		for c := 0; c < numCells; c++ {
 			// center and scale the value
 			// first subtract the mean, then divide by sd
-			v := (em.data[c][g] - mean) / sd
+			z := (em.data[c][g] - mean) / sd
 
-			// optional clipping to handel extreme outliers.
+			// cluppign to handel extreme outliers.
 			if clip > 0 {
-				if v > clip {
-					v = clip
-				} else if v < -clip {
-					v = -clip
+				if z > clip {
+					z = clip
+				} else if z < -clip {
+					z = -clip
 				}
 			}
 
 			// assign back to matrix
-			em.data[c][g] = v
+			em.data[c][g] = z
 		}
 	}
 }

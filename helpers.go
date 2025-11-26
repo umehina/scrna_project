@@ -160,29 +160,37 @@ func BuildMatrix(cm *CountMatrix) (ExpressionMatrix, int, int) {
 	return ExpressionMatrix{data: data, genes: genes}, numCell, numGene
 }
 
-// meanSD computes the mean and standard deviation of a slice. It returns mean and sd.
-// Qinglin Kong - 11/26/2025
-func meanSD(vals []float64) (mean float64, sd float64) {
-	n := float64(len(vals))
+// Mean computes the mean of a slice.
+func Mean(vals []float64) float64 {
+	n := len(vals)
 	if n == 0 {
-		return 0, 0
+		return 0
 	}
-
-	// calc mean
 	sum := 0.0
 	for _, v := range vals {
 		sum += v
 	}
-	mean = sum / n
+	return sum / float64(n)
+}
 
-	// variance
-	varSum := 0.0
-	for _, v := range vals {
-		diff := v - mean
-		varSum += diff * diff
+// Variance computes the population variance given a slice and its mean.
+func Variance(vals []float64, mean float64) float64 {
+	n := len(vals)
+	if n == 0 {
+		return 0
 	}
+	sumsq := 0.0
+	for _, v := range vals {
+		sumsq += v * v
+	}
+	variance := sumsq/float64(n) - mean*mean
+	if variance < 0 && variance > -1e-12 {
+		variance = 0
+	}
+	return variance
+}
 
-	// using population sd
-	sd = math.Sqrt(varSum / n)
-	return mean, sd
+// Std computes the standard deviation from variance.
+func Std(variance float64) float64 {
+	return math.Sqrt(variance)
 }
