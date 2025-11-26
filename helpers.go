@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // PearsonSummarize takes as input a number of rows as integer
 // It prints the first n genes for the first cell of the normalized *ExpressionMatrix
@@ -155,4 +158,31 @@ func BuildMatrix(cm *CountMatrix) (ExpressionMatrix, int, int) {
 	}
 
 	return ExpressionMatrix{data: data, genes: genes}, numCell, numGene
+}
+
+// meanSD computes the mean and standard deviation of a slice. It returns mean and sd.
+// Qinglin Kong - 11/26/2025
+func meanSD(vals []float64) (mean float64, sd float64) {
+	n := float64(len(vals))
+	if n == 0 {
+		return 0, 0
+	}
+
+	// calc mean
+	sum := 0.0
+	for _, v := range vals {
+		sum += v
+	}
+	mean = sum / n
+
+	// variance
+	varSum := 0.0
+	for _, v := range vals {
+		diff := v - mean
+		varSum += diff * diff
+	}
+
+	// using population sd
+	sd = math.Sqrt(varSum / n)
+	return mean, sd
 }

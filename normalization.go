@@ -170,6 +170,60 @@ func (em *ExpressionMatrix) Log1p() {
 	}
 }
 
+// Scale standardizes the ExpressionMatrix by scaling each gene to have mean 0 and standard deviation 1, with optional clipping of extreme values.
+// Qinglin Kong - 11/26/2025
+func (em *ExpressionMatrix) ScaleData(clip float64) {
+	// get num of cells/genes and return if empty
+	numCells := len(em.data)
+	if numCells == 0 {
+		return
+	}
+	numGenes := len(em.data[0])
+	if numGenes == 0 {
+		return
+	}
+
+	// range through each gene (column)
+	for g := 0; g < numGenes; g++ {
+		// get all values for that gene
+		vals := make([]float64, numCells)
+		for c := 0; c < numCells; c++ {
+			vals[c] = em.data[c][g]
+		}
+
+		// compute mean and sd
+		mean, sd := meanSD(vals)
+
+		// avoid division by zero
+		if sd == 0 {
+			// if sd is 0, set all values to 0, because they are all the same
+			for c := 0; c < numCells; c++ {
+				em.data[c][g] = 0
+			}
+			continue // move to next gene
+		}
+
+		// go through each cell again and scale the value
+		for c := 0; c < numCells; c++ {
+			// center and scale the value
+			// first subtract the mean, then divide by sd
+			v := (em.data[c][g] - mean) / sd
+
+			// optional clipping to handel extreme outliers.
+			if clip > 0 {
+				if v > clip {
+					v = clip
+				} else if v < -clip {
+					v = -clip
+				}
+			}
+
+			// assign back to matrix
+			em.data[c][g] = v
+		}
+	}
+}
+
 // ============== Pearson Residuals Normalization =================
 
 // TODO:
