@@ -2,6 +2,16 @@ package main
 
 import "gonum.org/v1/gonum/mat"
 
+type Graph struct {
+	Nodes int
+	Edges map[int][]Edge
+}
+
+type Edge struct {
+	To     int
+	Weight float64 // smaller distance = stronger connection
+}
+
 func (em *ExpressionMatrix) Cluster(k int, pcs *mat.Dense) {
 	// First, we create a distance matrix based on the cells
 	// Next, we connect each cell on the distance matrix to its K most similar cells using Leiden.
@@ -21,3 +31,18 @@ func (em *ExpressionMatrix) Cluster(k int, pcs *mat.Dense) {
 
 	// return communities
 }
+
+// workflow of this clhstingering.d
+
+// func DistanceMatrix(data *mat.Dense) *mat.Dense
+// func EuclideanDistance(a, b []float64) float64
+
+// func BuildKNNGraph(pcs *mat.Dense, k int) *Graph
+
+// func (g *Graph) Leiden(resolution float64, maxIter int) []int
+
+// func (g *Graph) InitSingletonPartition() []int
+// func (g *Graph) ModularityGain(i int, community int, partition []int, resolution float64) float64
+// func (g *Graph) MoveNodes(partition []int, resolution float64) []int
+// func (g *Graph) RefineCommunities(partition []int) []int
+// func (g *Graph) Aggregate(partition []int) *Graph

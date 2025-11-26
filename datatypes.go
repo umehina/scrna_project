@@ -28,18 +28,3 @@ type ExpressionMatrix struct {
 	data  [][]float64
 	genes []string
 }
-
-type Neighbor struct {
-	ID     int
-	Weight float64 // similarity, not distance
-}
-
-type Node struct {
-	ID        int
-	Community int
-	Neighbors []Neighbor
-}
-
-type Graph struct {
-	Nodes []Node
-}
