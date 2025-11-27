@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	
 )
 
 func main() {
@@ -32,7 +33,7 @@ func main() {
 	fmt.Println(" done.")
 
 	fmt.Print("Running PCA...")
-	pcs := em.PCA(2)
+	pcs := em.PCA(30)
 	fmt.Println(" done.")
 	fmt.Println("PC variances:", pcs.variances)
 
@@ -43,32 +44,36 @@ func main() {
 	}
 	fmt.Println("PCA plot saved as pca.png")
 
-	// //perform normalization
-	// sff := 10000.00
-	// // LogNormalize modifies 'filtered' in place and does not return a value, so call it directly.
-	// filtered.LogNormalize(sff)
-	// //filtered.Summary()
+	// Run TSNE
+	fmt.Println("Running t-SNE")
+	tsneResult := pcs.TSNE(2,30,200,1000)
+	if err != nil {
+		log.Fatal(err)
+	}
+	PlotTSNE(tsneResult.scores,"tsne.png")
+	fmt.Println("TSNE plot saved as tsne.png")
+	
+	// Run UMAP
+	fmt.Println("converting scores to csv file")
+	SavePCAScoresForR(pcs,"pca_scores.csv")
 
-	// // transform countMatrix to a *mat.Dense object
-	// MMatrix := CmToDense(filtered)
-	// // =================== TSNE ============================
-	// // Amy Ji - 11/13/2025
-	// // Define perplexity and iterations for RunTSNE
-	// perplexity := 30.0
-	// iterations := 1000
-	// tsne := RunTSNE(MMatrix, perplexity, iterations)
-	// // Print cell numbers and dimension
-	// fmt.Println(tsne.RawMatrix().Rows, tsne.RawMatrix().Cols)
-	// // plot mat.Dense after tSNE
-	// err1 := PlotTSNE(tsne, "tsne.png")
-	// if err1 != nil {
-	// 	panic(err1)
-	// }
+	fmt.Println("Running UMAP in R")
+	if err := RunRUMAP("umap_script.R", "pca_scores.csv", "umap_out.csv"); err != nil {
+    	log.Fatal(err)
+	}
 
-	// // =================== PCA ========================
-	// proj := RunPCA(MMatrix, 2)
-	// _ = proj // just so we can graph/plot it later on.
-	// PlotPCA2D(proj, "pca.png")
+	// Read UMAP embedding back into Go
+	// umapCells are the last column, checkout umap_out.csv file.
+	// It is omitted here, but we may need the cell barcode info in the future.
+	umapEmb,_, err := LoadUMAPFromCSV("umap_out.csv")
+	if err != nil {
+    	log.Fatal(err)
+	}
+
+	fmt.Println("Plotting UMAP")
+	PlotTSNE(umapEmb,"umap.png")
+
+
 
 	// // ================ PEARSON NORMALIZATION ==================
 	// em, numCells, numGenes := BuildMatrix(filtered)
