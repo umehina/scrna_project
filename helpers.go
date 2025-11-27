@@ -34,20 +34,26 @@ func (em *ExpressionMatrix) PearsonSummarize(n int) {
 	}
 }
 
-// InitializeExpressionMatrix takes as input the number of cells and genes as an integer
-// Vania Halim - 11/20/2025
-func InitializeExpressionMatrix(numCells, numGenes int) *ExpressionMatrix {
-
-	// initialize output ExpressionMatrix
+// InitializeEmptyCopy takes as input the number of cells and genes as an integer
+// Vania Halim - 11/20/2025; Qinglin Kong - 11/26/2025
+func (em *ExpressionMatrix) InitializeEmptyCopy() *ExpressionMatrix {
+	numCells := len(em.data)
+	numGenes := len(em.genes)
 
 	data := make([][]float64, numCells)
-
 	for i := range data {
 		data[i] = make([]float64, numGenes)
 	}
 
-	return &ExpressionMatrix{data: data}
+	return &ExpressionMatrix{data: data, genes: copyStringSlice(em.genes), barcodes: copyStringSlice(em.barcodes)}
+}
 
+// copyStringSlice makes a copy of a slice of strings.
+// Qinglin Kong - 11/26/2025
+func copyStringSlice(in []string) []string {
+	out := make([]string, len(in))
+	copy(out, in)
+	return out
 }
 
 // TotalCounts is a *CountMatrix Method that returns the total number of observed counts for all cells in the matrix
@@ -142,6 +148,7 @@ func (em *ExpressionMatrix) CellTotals() []float64 {
 func BuildMatrix(cm *CountMatrix) (ExpressionMatrix, int, int) {
 	numCell := len(cm.cells)
 	data := make([][]float64, numCell)
+	barcodes := make([]string, numCell)
 
 	genes := cm.FindAllGenes()
 	numGene := len(genes)
@@ -149,7 +156,9 @@ func BuildMatrix(cm *CountMatrix) (ExpressionMatrix, int, int) {
 	for i := 0; i < numCell; i++ {
 		values := make([]float64, numGene)
 		cell := cm.cells[i]
+		barcodes[i] = cell.barcode
 
+		// for each gene, get the count for that gene in the cell
 		for j, gene := range genes {
 			values[j] = cell.features[gene]
 		}
@@ -157,7 +166,7 @@ func BuildMatrix(cm *CountMatrix) (ExpressionMatrix, int, int) {
 		data[i] = values
 	}
 
-	return ExpressionMatrix{data: data, genes: genes}, numCell, numGene
+	return ExpressionMatrix{data: data, genes: genes, barcodes: barcodes}, numCell, numGene
 }
 
 // Mean computes the mean of a slice.

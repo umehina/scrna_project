@@ -16,6 +16,9 @@ type PCAResult struct {
 	loadings  *mat.Dense
 	variances []float64
 	totalvar  float64
+
+	geneNames []string
+	barcodes  []string
 }
 
 // ToDense converts the ExpressionMatrix into a row-major *mat.Dense so it can be used by gonum’s PCA routines.
@@ -59,7 +62,7 @@ func PCACompute(data *mat.Dense, k int) *PCAResult {
 	var loadings mat.Dense
 	pc.VectorsTo(&loadings)
 
-	// eigenvalues (length d), sorted largest → smallest
+	// eigenvalues (length d), sorted largest smallest
 	variances := pc.VarsTo(nil)
 	variancesk := variances[:k]
 
@@ -67,7 +70,7 @@ func PCACompute(data *mat.Dense, k int) *PCAResult {
 	loadk := loadings.Slice(0, d, 0, k).(*mat.Dense)
 
 	// scores = X * loadings_k
-	// (n x d) × (d x k) → (n x k)
+	// scores is n x k matrix (cell embeddings)
 	var scores mat.Dense
 	scores.Mul(data, loadk)
 
@@ -88,7 +91,10 @@ func PCACompute(data *mat.Dense, k int) *PCAResult {
 // This is a convenience wrapper to run PCA directly on an ExpressionMatrix.
 // Qinglin Kong 11/26/2025
 func (em *ExpressionMatrix) PCA(k int) *PCAResult {
-	return PCACompute(em.ToDense(), k)
+	pcaResult := PCACompute(em.ToDense(), k)
+	pcaResult.geneNames = em.genes
+	pcaResult.barcodes = em.barcodes
+	return pcaResult
 }
 
 // GetPC returns the j-th principal component (0-indexed) as a slice of float64.
