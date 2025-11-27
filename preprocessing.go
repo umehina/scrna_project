@@ -75,6 +75,15 @@ func (cm *CountMatrix) getIndicesBy(minFeatures, maxFeatures, minCounts, maxCoun
 	return indices
 }
 
+/* ----------
+Normalization Functions
+TODO: also implement concurrency here
+TODO: find out the math behind normalization logic
+TODO: actually implement normalization logic
+*/
+
+// buildMatrix method removed; use BuildMatrix from helpers.go instead.
+// ===============================================================================
 // Summary prints basic statistics of the CountMatrix.
 // Qinglin Kong - 10/28/2025
 // Input: none
@@ -100,7 +109,7 @@ func (cm *CountMatrix) ImportSummary() {
 	avgFeatures := float64(totalFeatures) / float64(totalCells)
 	avgCounts := float64(totalCounts) / float64(totalCells)
 
-	fmt.Println("CountMatrix Import Summary:")
+	fmt.Println("CountMatrix Summary:")
 	fmt.Println("-> Total Cells:", totalCells)
 	fmt.Println("   -> Average Features per Cell:", int(avgFeatures))
 	fmt.Println("   -> Average Counts per Cell:", int(avgCounts))

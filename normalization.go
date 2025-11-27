@@ -1,6 +1,91 @@
 package main
 
-import "math"
+import (
+	"math"
+)
+
+// ===================== PEARSON RESIDUALS NORMALIZATION =========================
+
+// TODO: make sure the outputted results make sense, do hand calculation
+// TODO: change pearson summary to output several rows
+
+// Pearson takes as input a non-normalized ExpressionMatrix and the input countsMatrix
+// returns a pointer to a new ExpressionMatrix where the values are the Pearson residuals of the observed counts
+// Vania Halim 11/20/2025
+func (em *ExpressionMatrix) Pearson(cm *CountMatrix, theta float64) *ExpressionMatrix {
+	numCells := len(em.data)
+	numGenes := len(em.genes)
+	// initialize output ExpressionMatrix
+	//normalized := &ExpressionMatrix{genes: em.genes}
+	normalized := em.InitializeEmptyCopy()
+
+	// create the expected value matrix
+	expected := em.Expected(cm)
+
+	// range through the input and expected matrix, updating the output matrix
+	// PR = (X_cg - u_cg)/sqrt(u_cg + (u_cg^2)/theta)
+	for c := range numCells {
+		for g := range numGenes {
+
+			// bounds safety checks
+			if c >= len(em.data) || g >= len(em.data[0]) {
+				continue
+			}
+			if c >= len(expected.data) || g >= len(expected.data[0]) {
+				continue
+			}
+
+			observedCount := em.data[c][g]
+			expectedCount := expected.data[c][g]
+
+			numerator := observedCount - expectedCount
+			denominator := math.Sqrt(expectedCount + ((expectedCount * expectedCount) / theta))
+
+			// avoid division by zero
+			if denominator == 0 {
+				normalized.data[c][g] = 0
+			} else {
+				normalized.data[c][g] = numerator / denominator
+			}
+
+		}
+	}
+
+	return normalized
+}
+
+// Expected returns the expected value matrix for a given ExpressionMatrix
+// It takes as input the total counts, computed from the countx matrix
+// mu_cg = (n_c x T_g)T
+
+func (em *ExpressionMatrix) Expected(cm *CountMatrix) *ExpressionMatrix {
+	numCells := len(em.data)
+	numGenes := len(em.genes)
+
+	geneTotals := em.GeneTotals()
+	totalCounts := cm.TotalCounts()
+
+	// create output expression matrix with the same genes as em
+	//expectedMatrix := &ExpressionMatrix{genes: em.genes}
+	expectedMatrix := em.InitializeEmptyCopy()
+
+	// range through all cells
+	for c := range numCells {
+		cellTotal := cm.cells[c].qcMetrics.nCountRNA
+
+		// range through all genes
+		for g := range numGenes {
+			// compute expected count of the cell and assign to current expectedMatrix input
+			if c >= len(cm.cells) || g >= len(geneTotals) {
+				continue
+			}
+			geneTotal := geneTotals[g]
+			expectedMatrix.data[c][g] = (cellTotal * geneTotal) / totalCounts
+		}
+	}
+
+	return expectedMatrix
+}
 
 // ==================== Log Normalization =========================
 
@@ -27,7 +112,6 @@ func (cm *CountMatrix) LogNormalize(scaleFactor float64) {
 			cell.features[feature] = math.Log1p(norm)
 		}
 	}
-
 }
 
 // LogNormalize normalizes the ExpressionMatrix using log normalization with a given scale factor.
@@ -80,6 +164,60 @@ func (em *ExpressionMatrix) Log1p() {
 		row := em.data[cell]
 		for gene := range row {
 			row[gene] = math.Log1p(row[gene])
+		}
+	}
+}
+
+// ScaleData standardizes the ExpressionMatrix by centering and scaling each gene (column). Each gene's values are transformed to have a mean of 0 and a standard deviation of 1. The method has a clip which the default is set to 10 based on Seurat's implementation.
+// Qinglin Kong - 11/26/2025
+func (em *ExpressionMatrix) ScaleData(clip float64) {
+	// get num of cells/genes and return if empty
+	numCells := len(em.data)
+	if numCells == 0 {
+		return
+	}
+	numGenes := len(em.data[0])
+	if numGenes == 0 {
+		return
+	}
+
+	// range through each gene (column)
+	for g := 0; g < numGenes; g++ {
+		// get all values for that gene
+		vals := make([]float64, numCells)
+		for c := 0; c < numCells; c++ {
+			vals[c] = em.data[c][g]
+		}
+
+		// Compute mean and standard deviation of this gene
+		mean := Mean(vals)
+		sd := Std(Variance(vals, mean))
+
+		// avoid division by zero
+		if sd == 0 {
+			// if sd is 0, set all values to 0, because they are all the same
+			for c := 0; c < numCells; c++ {
+				em.data[c][g] = 0
+			}
+			continue // move to next gene
+		}
+
+		for c := 0; c < numCells; c++ {
+			// center and scale the value
+			// first subtract the mean, then divide by sd
+			z := (em.data[c][g] - mean) / sd
+
+			// cluppign to handel extreme outliers.
+			if clip > 0 {
+				if z > clip {
+					z = clip
+				} else if z < -clip {
+					z = -clip
+				}
+			}
+
+			// assign back to matrix
+			em.data[c][g] = z
 		}
 	}
 }

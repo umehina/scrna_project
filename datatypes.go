@@ -25,6 +25,7 @@ type QCMetrics struct {
 }
 
 type ExpressionMatrix struct {
-	data  [][]float64
-	genes []string
+	data     [][]float64
+	genes    []string
+	barcodes []string
 }
