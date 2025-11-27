@@ -1,6 +1,10 @@
 package main
 
-import "gonum.org/v1/gonum/mat"
+import (
+	"math"
+
+	"gonum.org/v1/gonum/mat"
+)
 
 type Graph struct {
 	Nodes int
@@ -32,10 +36,55 @@ func (em *ExpressionMatrix) Cluster(k int, pcs *mat.Dense) {
 	// return communities
 }
 
-// workflow of this clhstingering.d
+// workflow of this clustering
 
-// func DistanceMatrix(data *mat.Dense) *mat.Dense
-// func EuclideanDistance(a, b []float64) float64
+// DistanceMatrix is a mat.Dense method that calls
+func DistanceMatrix(data *mat.Dense) *mat.Dense {
+
+	// initialize output distance matrix
+	rows, cols := data.Dims()
+	distMtx := mat.NewDense(rows, cols, nil)
+
+	// calculate and store euclidean distance of each cell in distMtx
+	for r := range rows {
+
+		// initialize slice of euclidean distances for cell i
+		cellDistance := make([]float64, cols)
+
+		cellOne := data.RawRowView(r)
+
+		for c := range cols {
+			cellTwo := data.RawRowView(c)
+
+			// calculate EuclideanDistance between two cells and add it to the cell's total cellDistance
+			cellDistance[c] = Euclidean(cellOne, cellTwo)
+
+		}
+
+		// set the cell's euclidean distance
+		data.SetRow(r, cellDistance)
+
+	}
+
+	return distMtx
+
+}
+
+// Euclidean takes as input two slices of floats, corresponding to the principal components of two different cells. It returns the Euclidean distance of the principal components between two cells. It is called within DistanceMatrix() to calculate the Euclidean distance between all cells.
+// // Vania Halim 11/27/2025
+func Euclidean(firstCell, secondCell []float64) float64 {
+
+	// initialize output euclidean distance
+	euclidean := 0.0
+
+	// range through all the principal components
+	for i := range firstCell {
+		diff := firstCell[i] - secondCell[i]
+		euclidean += (diff * diff)
+	}
+
+	return math.Sqrt(euclidean)
+}
 
 // func BuildKNNGraph(pcs *mat.Dense, k int) *Graph
 

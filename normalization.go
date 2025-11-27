@@ -57,6 +57,7 @@ func (em *ExpressionMatrix) Pearson(cm *CountMatrix, theta float64) *ExpressionM
 // Expected returns the expected value matrix for a given ExpressionMatrix
 // It takes as input the total counts, computed from the countx matrix
 // mu_cg = (n_c x T_g)T
+// Vania Halim 11/20/2025
 
 func (em *ExpressionMatrix) Expected(cm *CountMatrix) *ExpressionMatrix {
 	numCells := len(em.data)
