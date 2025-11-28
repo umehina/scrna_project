@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"sort"
 
 	"gonum.org/v1/gonum/mat"
 )
@@ -14,6 +15,11 @@ type Graph struct {
 type Edge struct {
 	To     int
 	Weight float64 // smaller distance = stronger connection
+}
+
+type Neighbor struct {
+	Index    int
+	Distance float64
 }
 
 func (em *ExpressionMatrix) Cluster(k int, pcs *mat.Dense) {
@@ -38,7 +44,8 @@ func (em *ExpressionMatrix) Cluster(k int, pcs *mat.Dense) {
 
 // workflow of this clustering
 
-// DistanceMatrix is a mat.Dense method that calls
+// DistanceMatrix takes as input the normalized and reduced data as a pointer to a mat.Dense object. It returns a Euclidean Distance Matrix between all cells as a *mat.Dense object
+// Vania Halim 11/27/2025
 func DistanceMatrix(data *mat.Dense) *mat.Dense {
 
 	// initialize output distance matrix
@@ -86,7 +93,46 @@ func Euclidean(firstCell, secondCell []float64) float64 {
 	return math.Sqrt(euclidean)
 }
 
-// func BuildKNNGraph(pcs *mat.Dense, k int) *Graph
+func BuildKNNGraph(distanceMtx *mat.Dense, k int) *Graph {
+
+	rows, _ := distanceMtx.Dims()
+	graph := &Graph{Nodes: rows} // output graph
+
+	// range through each cell's distances
+	for r := range rows {
+		// create temporary neighbors slice
+		n := make([]Neighbor, 0)
+		row := distanceMtx.RawRowView(r)
+
+		// range through columns
+		for c := range row {
+
+			if r == c { // skip self
+				continue
+			}
+
+			// make neighbor
+			neighbor := Neighbor{Index: c, Distance: row[c]}
+			n = append(n, neighbor)
+
+		}
+
+		// after all cell's neighbors have been added, sort to find k smallest ones
+		sort.Slice(n, func(a, b int) bool {
+			return n[a].Distance < n[b].Distance
+		})
+
+		// assign k closest neighbors as edges in the graph
+		for i := range k {
+			edge := Edge{To: n[i].Index, Weight: n[i].Distance}
+			graph.Edges[i] = append(graph.Edges[i], edge)
+		}
+
+	}
+
+	return graph
+
+}
 
 // func (g *Graph) Leiden(resolution float64, maxIter int) []int
 
