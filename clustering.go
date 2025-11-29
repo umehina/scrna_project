@@ -127,10 +127,8 @@ func fillDirectedKNNWeights(distanceMtx *mat.Dense, k int) *mat.Dense {
 			neighbor := knn[i]
 			weight := distanceToWeight(neighbor.Distance) // convert distance to weight
 
-			// keep maximum if already exists
-			if weight > directed.At(r, neighbor.Index) {
-				directed.Set(r, neighbor.Index, weight)
-			}
+			// assign weight directly (no need to check for maximum)
+			directed.Set(r, neighbor.Index, weight)
 		}
 	}
 
