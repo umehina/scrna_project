@@ -250,23 +250,20 @@ func (g *Graph) Leiden(resolution float64, maxIter int) []int {
 
 }
 
+// InitSingletonPartition initializes a partition where each node is its own cluster. It returns a slice of integers representing the initial partition.
+// Vania Halim 11/28/2025
 func (g *Graph) InitSingletonPartition() []int {
-
 	partition := make([]int, g.Nodes)
-
 	// put each node in its own partition
 	for i := range g.Nodes {
 		partition[i] = i
 	}
-
 	return partition
-
 }
 
 // ModularityGain computes the change in modularity by moving node i into the given cluster for a given resolution.
 // Vania Halim 11/28/2025
 func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float64) float64 {
-
 	var observed float64
 	var ki float64
 	var kj float64
@@ -321,4 +318,25 @@ func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float
 // func (g *Graph) MoveNodes(partition []int, resolution float64) []int
 // func (g *Graph) Refine(partition []int) []int
 // func (g *Graph) Aggregate(partition []int) *Graph
-// func Compare(oldPartition, newPartition []int) bool
+
+// Copy creates a copy of the given partition slice and returns it.
+// Qinglin Kong 11/29/2025
+func Copy(partition []int) []int {
+	newPartition := make([]int, len(partition))
+	copy(newPartition, partition)
+	return newPartition
+}
+
+// Compare checks if two partitions (basically two slices of integers) are equal.
+// Qinglin Kong 11/29/2025
+func Compare(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
