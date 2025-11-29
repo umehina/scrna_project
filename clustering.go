@@ -172,9 +172,6 @@ func topKNeighbors(n []Neighbor, k int) []Neighbor {
 // This function is used to covert distances into weights for the edges in the KNN graph, where smaller distances correspond to stornger connections (higher weights).
 // Qinlgin K0ng 11/29/2025
 func distanceToWeight(distance float64) float64 {
-	if distance == 0 {
-		return 1.0
-	}
 	return 1.0 / (1.0 + distance)
 }
 
