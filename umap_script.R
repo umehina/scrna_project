@@ -1,16 +1,22 @@
 
-# UMAP Implementation - Yinan Zhu 11/27/2025
+# UMAP Implementation - Yinan Zhu; Amy Ji 11/27/2025
 ###############################
 
 library(tidyverse)
 library(uwot)
 
 args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 2) {
+if (length(args) < 5) {
   stop("Usage: umap_script.R <input_pca_csv> <output_umap_csv>")
 }
-input_csv  <- args[0 + 1]  # R is 1-based
-output_csv <- args[1 + 1]
+
+# We can customize these important parameters in go.
+input_csv  <- args[1]  
+output_csv <- args[2]
+n_neighbors <- as.integer(args[3])
+min_dist <- as.numeric(args[4])
+metric <- args[5]
+
 
 # Load PCA scores: rows = cells, cols = PCs, first column = cell/barcode
 pca_scores <- read.csv(
@@ -25,9 +31,9 @@ pca_mat <- as.matrix(pca_scores)
 set.seed(123)
 umap_emb <- umap(
   pca_mat,
-  n_neighbors = 15,
-  min_dist    = 0.3,
-  metric      = "euclidean"
+  n_neighbors = n_neighbors,
+  min_dist    = min_dist,
+  metric      = metric
 )
 
 umap_df <- data.frame(

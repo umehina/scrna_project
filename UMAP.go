@@ -1,3 +1,4 @@
+// Amy Ji, Nov 28th, 2025
 package main
 
 import(
@@ -16,11 +17,12 @@ func SavePCAScoresForR(p *PCAResult, filename string) error {
     if p == nil || p.scores == nil {
         return fmt.Errorf("SavePCAScoresForR: PCAResult or scores is nil")
     }
+	// the number of rows (cells) should match the length of barcode. 
     n, k := p.scores.Dims()
     if len(p.barcodes) != n {
         return fmt.Errorf("barcode length (%d) != number of rows (%d)", len(p.barcodes), n)
     }
-
+	// Create a new file.
     f, err := os.Create(filename)
     if err != nil {
         return err
@@ -30,7 +32,8 @@ func SavePCAScoresForR(p *PCAResult, filename string) error {
     w := bufio.NewWriter(f)
     defer w.Flush()
 
-    // header: cell,PC1,PC2,...
+    // write headers: cell,PC1,PC2,...
+	// Not necessary, just in case someone wish to see the raw data. We label rows and cols.
     fmt.Fprint(w, "cell")
     for j := 0; j < k; j++ {
         fmt.Fprintf(w, ",PC%d", j+1)
@@ -41,6 +44,7 @@ func SavePCAScoresForR(p *PCAResult, filename string) error {
     for i := 0; i < n; i++ {
         fmt.Fprintf(w, "%s", p.barcodes[i]) // row name
         for j := 0; j < k; j++ {
+			// fill in the table with values from p.scores.
             fmt.Fprintf(w, ",%g", p.scores.At(i, j))
         }
         fmt.Fprint(w, "\n")
@@ -50,17 +54,28 @@ func SavePCAScoresForR(p *PCAResult, filename string) error {
 }
 
 // RunRUMAP calls the Rscript and run UMAP.
-func RunRUMAP(scriptPath, inputCSV, outputCSV string)error{
-	// execute the R file "umap_script.R"
-	// specify inputCSV and outputCSV
-    cmd := exec.Command("Rscript", scriptPath, inputCSV, outputCSV)
-    
+func RunRUMAP(scriptPath, inputCSV, outputCSV string, nNeighbors int, minDist float64, metric string) error{
+	// execute the R file "umap_script.R" (do not change this file name)
+    nnStr := strconv.Itoa(nNeighbors)
+    mdStr := fmt.Sprintf("%g", minDist) // %g is fine for R's as.numeric
+	// customizable parameters (do not need to change the R file)
+    cmd := exec.Command(
+        "Rscript",
+        scriptPath,
+        inputCSV,
+        outputCSV,
+        nnStr,
+        mdStr,
+        metric,
+    )
+
     out, err := cmd.CombinedOutput()
     if err != nil {
         return fmt.Errorf("running R UMAP failed: %v\nOutput:\n%s", err, string(out))
     }
-	return nil
+    return nil
 }
+
 
 // Convert UMAP result from csv back to mat.Dense
 func LoadUMAPFromCSV(filename string) (*mat.Dense, []string, error) {

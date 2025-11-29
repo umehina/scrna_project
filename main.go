@@ -5,9 +5,8 @@ import (
 	"log"
 	
 )
-
+//Amy Ji - 11/1/2025
 func main() {
-	//Amy Ji - 11/1/2025
 	// load dataset, returns CountMatrix struct
 	dataset, err := ParseCountMatrixFromFile("data/scRNA_dataset.csv")
 	if err != nil {
@@ -32,6 +31,7 @@ func main() {
 	em.ScaleData(10)
 	fmt.Println(" done.")
 
+	// ================ Run PCA ====================
 	fmt.Print("Running PCA...")
 	pcs := em.PCA(30)
 	fmt.Println(" done.")
@@ -44,43 +44,34 @@ func main() {
 	}
 	fmt.Println("PCA plot saved as pca.png")
 
-	// Run TSNE
+	// ================= Run TSNE ====================
 	fmt.Println("Running t-SNE")
-	tsneResult := pcs.TSNE(2,30,200,1000)
+	tsneResult := pcs.TSNE(2,30,200,1000) // to cluster after tSNE, call variable name tsneResult
 	if err != nil {
 		log.Fatal(err)
 	}
 	PlotTSNE(tsneResult.scores,"tsne.png")
 	fmt.Println("TSNE plot saved as tsne.png")
 	
-	// Run UMAP
+	// ================== Run UMAP ====================
 	fmt.Println("converting scores to csv file")
 	SavePCAScoresForR(pcs,"pca_scores.csv")
 
 	fmt.Println("Running UMAP in R")
-	if err := RunRUMAP("umap_script.R", "pca_scores.csv", "umap_out.csv"); err != nil {
+	// set UMAP parameters here!
+	if err := RunRUMAP("umap_script.R", "pca_scores.csv", "umap_out.csv", 30, 0.3, "euclidean"); err != nil {
     	log.Fatal(err)
 	}
 
 	// Read UMAP embedding back into Go
 	// umapCells are the last column, checkout umap_out.csv file.
 	// It is omitted here, but we may need the cell barcode info in the future.
-	umapEmb,_, err := LoadUMAPFromCSV("umap_out.csv")
+	umapResult,_, err := LoadUMAPFromCSV("umap_out.csv") // to cluster after umap, call variable name umapResult
 	if err != nil {
     	log.Fatal(err)
 	}
 
 	fmt.Println("Plotting UMAP")
-	PlotTSNE(umapEmb,"umap.png")
-
-
-
-	// // ================ PEARSON NORMALIZATION ==================
-	// em, numCells, numGenes := BuildMatrix(filtered)
-
-	// normalized := em.Pearson(filtered, numCells, numGenes, 100)
-
-	// // print first 5
-	// normalized.PearsonSummarize(10)
+	PlotTSNE(umapResult,"umap.png")
 
 }
