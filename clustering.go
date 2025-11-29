@@ -201,10 +201,7 @@ func symmetrizeWeightsUsing(directed *mat.Dense) map[int][]Edge {
 			}
 
 			// undirected weight is the maximum of the two directions
-			undirectedWeight := weightIJ
-			if weightJI > undirectedWeight {
-				undirectedWeight = weightJI
-			}
+			undirectedWeight := math.Max(weightIJ, weightJI)
 
 			// skip if undirected weight is non-positive
 			if undirectedWeight <= 0 {
