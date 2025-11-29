@@ -49,18 +49,18 @@ func (em *ExpressionMatrix) Cluster(k int, pcs *mat.Dense) {
 func DistanceMatrix(data *mat.Dense) *mat.Dense {
 
 	// initialize output distance matrix
-	rows, cols := data.Dims()
-	distMtx := mat.NewDense(rows, cols, nil)
+	rows, _ := data.Dims()
+	distMtx := mat.NewDense(rows, rows, nil)
 
 	// calculate and store euclidean distance of each cell in distMtx
 	for r := range rows {
 
 		// initialize slice of euclidean distances for cell i
-		cellDistance := make([]float64, cols)
+		cellDistance := make([]float64, rows)
 
 		cellOne := data.RawRowView(r)
 
-		for c := range cols {
+		for c := range rows {
 			cellTwo := data.RawRowView(c)
 
 			// calculate EuclideanDistance between two cells and add it to the cell's total cellDistance
@@ -69,7 +69,7 @@ func DistanceMatrix(data *mat.Dense) *mat.Dense {
 		}
 
 		// set the cell's euclidean distance
-		data.SetRow(r, cellDistance)
+		distMtx.SetRow(r, cellDistance)
 
 	}
 
@@ -93,10 +93,12 @@ func Euclidean(firstCell, secondCell []float64) float64 {
 	return math.Sqrt(euclidean)
 }
 
+// BuildKNNGraph takes as input a distance matrix as a pointer to a mat.Dense object and an integer k representing the number of nearest neighbors to connect each cell to. It returns a pointer to a Graph object representing the KNN graph constructed from the distance matrix.
+// // Vania Halim 11/27/2025
 func BuildKNNGraph(distanceMtx *mat.Dense, k int) *Graph {
 
 	rows, _ := distanceMtx.Dims()
-	graph := &Graph{Nodes: rows} // output graph
+	graph := &Graph{Nodes: rows, Edges: make(map[int][]Edge)} // output graph
 
 	// range through each cell's distances
 	for r := range rows {
@@ -125,7 +127,7 @@ func BuildKNNGraph(distanceMtx *mat.Dense, k int) *Graph {
 		// assign k closest neighbors as edges in the graph
 		for i := range k {
 			edge := Edge{To: n[i].Index, Weight: n[i].Distance}
-			graph.Edges[i] = append(graph.Edges[i], edge)
+			graph.Edges[r] = append(graph.Edges[r], edge)
 		}
 
 	}
@@ -134,10 +136,106 @@ func BuildKNNGraph(distanceMtx *mat.Dense, k int) *Graph {
 
 }
 
-// func (g *Graph) Leiden(resolution float64, maxIter int) []int
+// Leiden is a method of the *Graph object. It applies the Leiden algorithm to the KNN graph.
+// Input: a resolution parameter as a decimal and a maximum number of iterations as an integer.
+// Output: a slice of integers representing the communities that each original node is assigned to after Leiden is applied.
+// Vania Halim 11/28/2025
+func (g *Graph) Leiden(resolution float64, maxIter int) []int {
 
-// func (g *Graph) InitSingletonPartition() []int
-// func (g *Graph) ModularityGain(i int, community int, partition []int, resolution float64) float64
+	// initialize clusters with each node in its community
+	clusters := g.InitSingletonPartition()
+
+	for i := range maxIter {
+		// create copy of clusters to compare to the new one
+		old := Copy(clusters)
+
+		// move all nodes until clusters reaches local convergence
+		clusters = g.MoveNodes(clusters, resolution)
+		clusters = g.Refine(clusters)
+
+		// if clusters have converged globally, return clusters
+		if Compare(old, clusters) {
+			return clusters
+		}
+
+		// else aggregate and repeat
+		g = g.Aggregate(clusters)
+		clusters = g.InitSingletonPartition()
+	}
+
+	return clusters
+
+}
+
+func (g *Graph) InitSingletonPartition() []int {
+
+	partition := make([]int, g.Nodes)
+
+	// put each node in its own partition
+	for i := range g.Nodes {
+		partition[i] = i
+	}
+
+	return partition
+
+}
+
+// ModularityGain computes the change in modularity by moving node i into the given cluster for a given resolution.
+// Vania Halim 11/28/2025
+func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float64) float64 {
+
+	var observed float64
+	var ki float64
+	var kj float64
+	var total float64
+
+	var edges []Edge // temp slice of edges
+
+	// compute total weight
+	for _, edges := range g.Edges {
+		for _, e := range edges {
+			total += e.Weight
+		}
+
+	}
+
+	// compute observed: sum of outgoing edge weights from node i to the cluster
+	edges = g.Edges[i]
+	for _, e := range edges {
+		if partition[e.To] == cluster {
+			observed += e.Weight
+		}
+	}
+
+	// compute kj: sum of outgoing edge weights from nodes in cluster
+	for node, community := range partition {
+
+		// if the node is not in the community cluster then skip it
+		if community != cluster {
+			continue
+		}
+
+		// else explore the edge weights of that node
+		edges = g.Edges[node]
+		for _, e := range edges {
+			kj += e.Weight
+		}
+
+	}
+
+	// compute ki : sum of outgoing edge weights from node i
+	for _, e := range g.Edges[i] {
+		ki += e.Weight
+	}
+
+	// compute deltaQ
+	expected := (ki * kj) / total
+	deltaQ := observed - (resolution * expected)
+
+	return deltaQ
+}
+
 // func (g *Graph) MoveNodes(partition []int, resolution float64) []int
-// func (g *Graph) RefineCommunities(partition []int) []int
+// func (g *Graph) Refine(partition []int) []int
 // func (g *Graph) Aggregate(partition []int) *Graph
+// func Compare(oldPartition, newPartition []int) bool
