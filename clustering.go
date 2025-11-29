@@ -8,8 +8,9 @@ import (
 )
 
 type Graph struct {
-	Nodes int
-	Edges map[int][]Edge
+	Nodes       int
+	Edges       map[int][]Edge
+	TotalWeight float64
 }
 
 type Edge struct {
@@ -103,10 +104,12 @@ func BuildKNNGraph(distanceMtx *mat.Dense, k int) *Graph {
 	directed := fillDirectedKNNWeights(distanceMtx, k)
 
 	// make an undirected graph by symmetrizing the weights
-	edges := symmetrizeWeightsUsing(directed)
+	edges, totalWeight := symmetrizeWeightsUsing(directed)
+
+	// find total weight of all edges in the top half of edges only
 
 	// build final Graph object to return
-	graph := &Graph{Nodes: rows, Edges: edges}
+	graph := &Graph{Nodes: rows, Edges: edges, TotalWeight: totalWeight}
 	return graph
 }
 
@@ -175,9 +178,11 @@ func distanceToWeight(distance float64) float64 {
 
 // symmetrizeWeightsUsing takes as input a pointer to a mat.Dense representing the directed KNN weights between nodes. It returns a map[int][]Edge representing the undirected edges of the graph, where each key is a node index and the value is a slice of Edge structs representing the edges connected to that node.
 // Qinglin Kong 11/29/2025
-func symmetrizeWeightsUsing(directed *mat.Dense) map[int][]Edge {
+func symmetrizeWeightsUsing(directed *mat.Dense) (map[int][]Edge, float64) {
 	row, _ := directed.Dims()
 	edges := make(map[int][]Edge) // final undirected adjacency map
+
+	var totalWeight float64 // sum of all undirected weights
 
 	// ensure every node appears in the adjacency map, even if isolated
 	for i := range row {
@@ -206,10 +211,13 @@ func symmetrizeWeightsUsing(directed *mat.Dense) map[int][]Edge {
 			// add edge i <-> j
 			edges[i] = append(edges[i], Edge{To: j, Weight: undirectedWeight})
 			edges[j] = append(edges[j], Edge{To: i, Weight: undirectedWeight})
+
+			// add weight to totalWeight
+			totalWeight += undirectedWeight
 		}
 	}
 
-	return edges
+	return edges, totalWeight
 }
 
 // ==================== Leiden Clustering ====================
@@ -264,9 +272,7 @@ func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float
 	var kj float64
 	var total float64
 
-	var edges []Edge // temp slice of edges
-
-	// compute total weight
+	// compute total weight by ranging over the top triangle of the symmetrized weights
 	for _, edges := range g.Edges {
 		for _, e := range edges {
 			total += e.Weight
@@ -275,8 +281,7 @@ func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float
 	}
 
 	// compute observed: sum of outgoing edge weights from node i to the cluster
-	edges = g.Edges[i]
-	for _, e := range edges {
+	for _, e := range g.Edges[i] {
 		if partition[e.To] == cluster {
 			observed += e.Weight
 		}
@@ -291,8 +296,7 @@ func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float
 		}
 
 		// else explore the edge weights of that node
-		edges = g.Edges[node]
-		for _, e := range edges {
+		for _, e := range g.Edges[node] {
 			kj += e.Weight
 		}
 
