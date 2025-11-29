@@ -270,24 +270,15 @@ func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float
 	var observed float64
 	var ki float64
 	var kj float64
-	var total float64
 
-	// compute total weight by ranging over the top triangle of the symmetrized weights
-	for _, edges := range g.Edges {
-		for _, e := range edges {
-			total += e.Weight
-		}
-
-	}
-
-	// compute observed: sum of outgoing edge weights from node i to the cluster
-	for _, e := range g.Edges[i] {
-		if partition[e.To] == cluster {
-			observed += e.Weight
+	// compute observed: sum of edge weights between node i and nodes in the cluster
+	for _, e := range g.Edges[i] { // ranges through all edges in node i
+		if partition[e.To] == cluster { // if node i has an edge to a node in cluster
+			observed += e.Weight // add weight of that edge to sum of observed edge weights
 		}
 	}
 
-	// compute kj: sum of outgoing edge weights from nodes in cluster
+	// compute kj (cluster degree): sum of edge weights for all nodes in the cluster
 	for node, community := range partition {
 
 		// if the node is not in the community cluster then skip it
@@ -302,13 +293,13 @@ func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float
 
 	}
 
-	// compute ki : sum of outgoing edge weights from node i
+	// compute ki (node i degree) : sum of edge weights incident to node i
 	for _, e := range g.Edges[i] {
 		ki += e.Weight
 	}
 
 	// compute deltaQ
-	expected := (ki * kj) / total
+	expected := (ki * kj) / g.TotalWeight
 	deltaQ := observed - (resolution * expected)
 
 	return deltaQ
