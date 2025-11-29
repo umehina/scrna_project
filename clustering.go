@@ -231,7 +231,7 @@ func (g *Graph) Leiden(resolution float64, maxIter int) []int {
 	// initialize clusters with each node in its community
 	clusters := g.InitSingletonPartition()
 
-	for i := range maxIter {
+	for i := 0; i < maxIter; i++ {
 		// create copy of clusters to compare to the new one
 		old := Copy(clusters)
 
