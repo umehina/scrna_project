@@ -254,7 +254,32 @@ func (g *Graph) Leiden(resolution float64, maxIter int) []int {
 
 }
 
-// func (g *Graph) Refine(partition []int) []int
+// Refine normalizes the cluster ids so that IDs range from 0 to the number of unique clusters in the partition
+// Input: a []int partition mapping node IDs to cluster IDs, e.g. [3,3,0,0,0,3,2]
+// Output: a []int with normalized partition values: [0,0,1,1,1,0,2]
+// Vania Halim - 11/29/2025
+
+func (g *Graph) Refine(partition []int) []int {
+
+	normalized := make(map[int]int, 0)
+	var numUnique int
+
+	// collect unique partition values and map them to "normalized" partition values
+	for i, cluster := range partition {
+
+		_, exists := normalized[cluster]
+
+		if !exists { // encountering new unique cluster ID
+			normalized[cluster] = numUnique
+			numUnique++
+		}
+
+		// set value based on normalized
+		partition[i] = normalized[cluster]
+	}
+
+	return partition
+}
 
 // MoveNodes is a *Graph method that iteratively moves nodes in the graph to different communities until no single node moves result in a modularity gain
 // Input: a partition as a slice of integers denoting the cluster for each node and a resolution parameter as a decimal
