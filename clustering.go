@@ -2,14 +2,16 @@ package main
 
 import (
 	"math"
+	"math/rand"
 	"sort"
 
 	"gonum.org/v1/gonum/mat"
 )
 
 type Graph struct {
-	Nodes int
-	Edges map[int][]Edge
+	Nodes       int
+	Edges       map[int][]Edge
+	TotalWeight float64
 }
 
 type Edge struct {
@@ -103,10 +105,12 @@ func BuildKNNGraph(distanceMtx *mat.Dense, k int) *Graph {
 	directed := fillDirectedKNNWeights(distanceMtx, k)
 
 	// make an undirected graph by symmetrizing the weights
-	edges := symmetrizeWeightsUsing(directed)
+	edges, totalWeight := symmetrizeWeightsUsing(directed)
+
+	// find total weight of all edges in the top half of edges only
 
 	// build final Graph object to return
-	graph := &Graph{Nodes: rows, Edges: edges}
+	graph := &Graph{Nodes: rows, Edges: edges, TotalWeight: totalWeight}
 	return graph
 }
 
@@ -174,10 +178,12 @@ func distanceToWeight(distance float64) float64 {
 }
 
 // symmetrizeWeightsUsing takes as input a pointer to a mat.Dense representing the directed KNN weights between nodes. It returns a map[int][]Edge representing the undirected edges of the graph, where each key is a node index and the value is a slice of Edge structs representing the edges connected to that node.
-// Qinglin Kong 11/29/2025
-func symmetrizeWeightsUsing(directed *mat.Dense) map[int][]Edge {
+// Qinglin Kong 11/29/2025, Vania Halim 11/29/2025
+func symmetrizeWeightsUsing(directed *mat.Dense) (map[int][]Edge, float64) {
 	row, _ := directed.Dims()
 	edges := make(map[int][]Edge) // final undirected adjacency map
+
+	var totalWeight float64 // sum of all undirected weights
 
 	// ensure every node appears in the adjacency map, even if isolated
 	for i := range row {
@@ -206,10 +212,13 @@ func symmetrizeWeightsUsing(directed *mat.Dense) map[int][]Edge {
 			// add edge i <-> j
 			edges[i] = append(edges[i], Edge{To: j, Weight: undirectedWeight})
 			edges[j] = append(edges[j], Edge{To: i, Weight: undirectedWeight})
+
+			// add weight to totalWeight
+			totalWeight += undirectedWeight
 		}
 	}
 
-	return edges
+	return edges, totalWeight
 }
 
 // ==================== Leiden Clustering ====================
@@ -218,18 +227,18 @@ func symmetrizeWeightsUsing(directed *mat.Dense) map[int][]Edge {
 // Input: a resolution parameter as a decimal and a maximum number of iterations as an integer.
 // Output: a slice of integers representing the communities that each original node is assigned to after Leiden is applied.
 // Vania Halim 11/28/2025
-func (g *Graph) Leiden(resolution float64, maxIter int) []int {
+func (g *Graph) Leiden(resolution, gamma, theta float64, maxIter int) []int {
 
 	// initialize clusters with each node in its community
 	clusters := g.InitSingletonPartition()
 
-	for i := range maxIter {
+	for i := 0; i < maxIter; i++ {
 		// create copy of clusters to compare to the new one
 		old := Copy(clusters)
 
 		// move all nodes until clusters reaches local convergence
 		clusters = g.MoveNodes(clusters, resolution)
-		clusters = g.Refine(clusters)
+		clusters = g.RefinePartition(clusters, resolution, gamma, theta)
 
 		// if clusters have converged globally, return clusters
 		if Compare(old, clusters) {
@@ -237,11 +246,348 @@ func (g *Graph) Leiden(resolution float64, maxIter int) []int {
 		}
 
 		// else aggregate and repeat
+		clusters = g.Refine(clusters)
 		g = g.Aggregate(clusters)
 		clusters = g.InitSingletonPartition()
 	}
 
 	return clusters
+
+}
+
+// ==================================== AGGREGATION STAGE OF LEIDEN ====================================
+
+// Refine looks at each cluster and sees if it can be further subdivided into clusters
+// Input: a []int partition mapping node IDs to cluster IDs, e.g. [3,3,0,0,0,3,2]
+// Output: a []int with normalized partition values: [0,0,1,1,1,0,2]
+// Vania Halim - 11/29/2025
+func (g *Graph) Refine(partition []int) []int {
+
+	normalized := make(map[int]int, 0)
+	var numUnique int
+
+	// collect unique partition values and map them to "normalized" partition values
+	for i, cluster := range partition {
+
+		_, exists := normalized[cluster]
+
+		if !exists { // encountering new unique cluster ID
+			normalized[cluster] = numUnique
+			numUnique++
+		}
+
+		// set value based on normalized
+		partition[i] = normalized[cluster]
+	}
+
+	return partition
+}
+
+//func (g *Graph) Aggregate(partition []int) *Graph
+
+// ==================================== REFINEMENT STAGE OF LEIDEN ====================================
+
+// RefinePartition
+// Input: partition []int mapping nodes to cluster IDs after the local move stage, and parameters resolution, gamma, theta as float64.
+// Output: a refined partition as a []int, which may be further subdivided into different clusters
+// Vania Halim - 11/29/2025
+func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float64) []int {
+
+	n := len(partition)
+
+	refinedPartition := InitSingletonPartition(n) // initialize
+	clusters := g.NodesByCluster(partition)
+
+	for _, nodes := range clusters {
+		refinedPartition = g.MergeNodesSubset(nodes, partition, refinedPartition, resolution, gamma, theta)
+	}
+
+	return refinedPartition
+}
+
+// InitSingletonPartition takes an integer n and returns a slice []int of n nodes mapped to their own clusters
+// Vania Halim - 11/29/2025
+func InitSingletonPartition(n int) []int {
+
+	partition := make([]int, n)
+	// put each node in its own partition
+	for i := range partition {
+		partition[i] = i
+	}
+	return partition
+
+}
+
+// NodesByCluster takes a partition as a []int and returns a mapping of cluster IDs []int containing nodes belonging to that clusterID
+// Vania Halim - 11/29/2025
+func (g *Graph) NodesByCluster(partition []int) map[int][]int {
+
+	grouped := make(map[int][]int)
+
+	for node, cluster := range partition {
+
+		nodes := grouped[cluster]
+		nodes = append(nodes, node)
+
+	}
+
+	return grouped
+}
+
+// MergeNodesSubset takes as input a refinedPartition []int where each node is originally a singleton. It modifies refinedPartition in place so that new sub clusters might be formed.
+// Vania Halim - 11/29/2025
+
+func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resolution, gamma, theta float64) []int {
+
+	wellConnectedNodes := g.FindWellConnectedNodes(nodes, partition, gamma) // well connected nodes within a cluster
+	randomNodes := RandomNodeOrder(len(wellConnectedNodes))
+
+	improved := false
+
+	for improved {
+
+		for _, i := range randomNodes {
+
+			currNode := wellConnectedNodes[i]
+
+			if !Singleton(currNode, partition) {
+				continue
+			}
+
+			// only process singleton nodes
+			wellConnectedClusters := g.FindCandidateClusters(currNode, nodes, refinedPartition, gamma)
+
+			if len(wellConnectedClusters) == 0 { // nonzero number of candidate clusters
+				continue
+			}
+
+			// compute likelihood of moving to a candidate cluster
+			probs := g.ComputeMoveProbability(currNode, wellConnectedClusters, refinedPartition, theta)
+
+			// move to one of the candidate clusters based on probabilities computed
+			newCluster := g.SampleCommunity(wellConnectedClusters, probs)
+			refinedPartition[currNode] = newCluster
+
+			improved = true
+
+		}
+	}
+
+	return refinedPartition
+}
+
+// FindWellConnectedNodes
+// Vania Halim - 11/29/2025
+func (g *Graph) FindWellConnectedNodes(nodes, partition []int, gamma float64) []int {
+
+	connected := make([]int, 0)
+	kCluster := g.ClusterDegree(nodes) // total weights
+
+	// range over all nodes in the original cluster
+	for _, node := range nodes {
+
+		kNode := g.NodeDegree(node)
+
+		// compute E(v, S-v)
+		ev := g.EdgesToCluster(node, nodes)
+
+		// compute connectivity
+		threshold := gamma*kNode - (kCluster * kNode)
+		if ev > threshold {
+			connected = append(connected, node)
+		}
+
+	}
+
+	return connected
+
+}
+
+// EdgesToCluster computes the total edge weights of the node to all nodes in the subset except itself
+// Vania Halim - 11/29/2025
+func (g *Graph) EdgesToCluster(node int, cluster []int) float64 {
+	var sum float64
+
+	// create set of nodes in the cluster
+	clusterSet := make(map[int]struct{}, len(cluster))
+
+	// range through each node in the cluster and add it to the map
+	for _, currNode := range cluster {
+
+		if currNode != node {
+			clusterSet[currNode] = struct{}{}
+		}
+
+	}
+
+	// range through each edge, if it is to a node in the cluster, add weight to sum
+	for _, e := range g.Edges[node] {
+
+		_, exists := clusterSet[e.To] // check if e.To is in the cluster
+
+		if exists {
+			sum += e.Weight
+		}
+	}
+
+	return sum
+}
+
+// ClusterDegree computes the total edge weights of all nodes in a cluster
+// Vania Halim - 11/29/2025
+func (g *Graph) ClusterDegree(nodes []int) float64 {
+	var sum float64
+
+	// range through all nodes in the cluster
+	for _, node := range nodes {
+
+		// range through all edges in each node
+		for _, e := range g.Edges[node] {
+			sum += e.Weight
+		}
+
+	}
+
+	return sum
+}
+
+// Singleton checks whether a given node ID in refinedPartition is the only node in its cluster returning true if so and false otherwise
+// Vania Halim - 11/29/2025
+func Singleton(node int, refinedPartition []int) bool {
+
+	count := 0
+	nodeCluster := refinedPartition[node]
+
+	for _, cluster := range refinedPartition {
+		if cluster == nodeCluster {
+			count++
+		}
+
+		if count > 1 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// ============================ LOCAL MOVE NODES PHASE OF LEIDEN ===============================
+
+// MoveNodes is a *Graph method that iteratively moves nodes in the graph to different communities until no single node moves result in a modularity gain
+// Input: a partition as a slice of integers denoting the cluster for each node and a resolution parameter as a decimal
+// Output: a partition as a slice of ints where indices are node IDs and the value is the cluster ID
+// Vania Halim - 11/29/2025
+func (g *Graph) MoveNodes(partition []int, resolution float64) []int {
+
+	improved := true
+
+	for improved {
+
+		improved = false
+
+		random := RandomNodeOrder(len(partition))
+
+		// move each node order[i]
+		for _, i := range random {
+
+			var nodeImproved bool // true if single node improvement resulted in a modularity gain
+
+			// find candidate clusters - clusters that node i's neighbors belong to, excluding node i's own cluster
+			candidateClusters := FindCandidateClusters(i, g.Edges[i], partition)
+			partition[i], nodeImproved = FindBestCluster(i, g, candidateClusters, partition, resolution)
+
+			if nodeImproved {
+				improved = true
+			}
+
+		}
+
+	}
+
+	return partition
+
+}
+
+// FindBestCluster identifies the cluster among a node's candidate clusters that would result in the highest modularity gain
+// Input: node as an integer, the undirected graph as a *Graph, slices of integers representing the ids of candidate clusters that node will be moved into, partition as a []int mapping node IDs to clusterIDs, and the resolution parameter as a float64.
+// Output: the cluster ID that results in the highest modularity gain, and a boolean that is true when there is a modularity gain from moving the node into any of the candidate clusters
+// Vania Halim - 11/29/2025
+func FindBestCluster(node int, g *Graph, candidateClusters, partition []int, resolution float64) (int, bool) {
+
+	// initialize maxGain and bestCluster for each node
+	var maxGain float64
+	currCluster := partition[node]
+	bestCluster := currCluster
+
+	// range through each cluster in candidateClusters
+	for _, cluster := range candidateClusters {
+
+		// find deltaQ of moving node i to each cluster in candidateClusters
+		gain := g.ModularityGain(node, cluster, partition, resolution)
+
+		// update maxGain and bestCluster if needed
+		if gain > maxGain {
+			maxGain = gain
+			bestCluster = cluster
+		}
+
+	}
+
+	improved := (bestCluster != currCluster)
+
+	return bestCluster, improved
+
+}
+
+// RandomNodeOrder implements Fisher-Yates swapping on the slice of node IDs, returning a randomized order of node IDs to walk through
+// Input: n, the number of nodes
+// Output: a randomized slice of node IDs
+// Vania Halim - 11/29/2025
+
+func RandomNodeOrder(n int) []int {
+
+	// initialize slice of nodeIDs in order
+	nodes := make([]int, n)
+	for i := range nodes {
+		nodes[i] = i
+	}
+
+	// randomize nodes order
+	randomized := make([]int, n)
+	for i := n - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		nodes[i], nodes[j] = nodes[j], nodes[i]
+	}
+
+	return randomized
+
+}
+
+// FindCandidateClusters returns the candidate clusters that node i can move into based on its neighbors
+// Input: a node id i as an integer, node i's edges as a []Edge, and a partition as a []int mapping node id to cluster id
+// Output: a []int where each value is the id of a cluster that node i could move to, excluding itself
+// Vania Halim 11/29/2025
+
+func FindCandidateClusters(node int, edges []Edge, partition []int) []int {
+
+	// identify candidate clusters from neighbors of the current Node
+	candidateClusters := make([]int, 0)
+	currCluster := partition[node]
+
+	for _, e := range edges {
+
+		neighborCluster := partition[e.To]
+
+		// skip if the neighbor's cluster is the same as the node's cluster
+		if neighborCluster == currCluster {
+			continue
+		}
+
+		// else add that cluster to the list of candidate clusters
+		candidateClusters = append(candidateClusters, neighborCluster)
+	}
+
+	return candidateClusters
 
 }
 
@@ -262,27 +608,15 @@ func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float
 	var observed float64
 	var ki float64
 	var kj float64
-	var total float64
 
-	var edges []Edge // temp slice of edges
-
-	// compute total weight
-	for _, edges := range g.Edges {
-		for _, e := range edges {
-			total += e.Weight
-		}
-
-	}
-
-	// compute observed: sum of outgoing edge weights from node i to the cluster
-	edges = g.Edges[i]
-	for _, e := range edges {
-		if partition[e.To] == cluster {
-			observed += e.Weight
+	// compute observed: sum of edge weights between node i and nodes in the cluster
+	for _, e := range g.Edges[i] { // ranges through all edges in node i
+		if partition[e.To] == cluster { // if node i has an edge to a node in cluster
+			observed += e.Weight // add weight of that edge to sum of observed edge weights
 		}
 	}
 
-	// compute kj: sum of outgoing edge weights from nodes in cluster
+	// compute kj (cluster degree): sum of edge weights for all nodes in the cluster
 	for node, community := range partition {
 
 		// if the node is not in the community cluster then skip it
@@ -291,28 +625,34 @@ func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float
 		}
 
 		// else explore the edge weights of that node
-		edges = g.Edges[node]
-		for _, e := range edges {
+		for _, e := range g.Edges[node] {
 			kj += e.Weight
 		}
 
 	}
 
-	// compute ki : sum of outgoing edge weights from node i
+	// compute ki (node i degree) : sum of edge weights incident to node i
 	for _, e := range g.Edges[i] {
 		ki += e.Weight
 	}
 
 	// compute deltaQ
-	expected := (ki * kj) / total
+	expected := (ki * kj) / g.TotalWeight
 	deltaQ := observed - (resolution * expected)
 
 	return deltaQ
 }
 
-// func (g *Graph) MoveNodes(partition []int, resolution float64) []int
-// func (g *Graph) Refine(partition []int) []int
-// func (g *Graph) Aggregate(partition []int) *Graph
+func (g *Graph) NodeDegree(nodeID int) float64 {
+
+	var ki float64
+
+	for _, e := range g.Edges[nodeID] {
+		ki += e.Weight
+	}
+
+	return ki
+}
 
 // Copy creates a copy of the given partition slice and returns it.
 // Qinglin Kong 11/29/2025
