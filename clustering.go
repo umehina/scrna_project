@@ -172,7 +172,7 @@ func topKNeighbors(n []Neighbor, k int) []Neighbor {
 
 // distanceToWeight takes as input a float representing the distance between two nodes. It returns a float representing the weight of the edge connecting the two nodes, calculated as 1 / (1 + distance).
 // This function is used to covert distances into weights for the edges in the KNN graph, where smaller distances correspond to stornger connections (higher weights).
-// Qinlgin K0ng 11/29/2025
+// Qinglin Kong 11/29/2025
 func distanceToWeight(distance float64) float64 {
 	return 1.0 / (1.0 + distance)
 }
@@ -292,7 +292,6 @@ func (g *Graph) Refine(partition []int) []int {
 // Output: a refined partition as a []int, which may be further subdivided into different clusters
 // Vania Halim - 11/29/2025
 func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float64) []int {
-
 	n := len(partition)
 
 	refinedPartition := InitSingletonPartition(n) // initialize
@@ -305,17 +304,21 @@ func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float6
 	return refinedPartition
 }
 
-// InitSingletonPartition takes an integer n and returns a slice []int of n nodes mapped to their own clusters
+// InitSingletonPartition takes as input an integer n representing the number of nodes. It returns a slice of integers of length n where each node is assigned to its own unique cluster.
 // Vania Halim - 11/29/2025
 func InitSingletonPartition(n int) []int {
-
 	partition := make([]int, n)
 	// put each node in its own partition
 	for i := range partition {
 		partition[i] = i
 	}
 	return partition
+}
 
+// (g *Graph) InitSingletonPartition() takes no input and returns a slice []int of length g.Nodes where each node is mapped to its own cluster
+// Qinglin Kong - 11/30/2025
+func (g *Graph) InitSingletonPartition() []int {
+	return InitSingletonPartition(g.Nodes)
 }
 
 // NodesByCluster takes a partition as a []int and returns a mapping of cluster IDs []int containing nodes belonging to that clusterID
@@ -335,8 +338,10 @@ func (g *Graph) NodesByCluster(partition []int) map[int][]int {
 
 // MergeNodesSubset takes as input a refinedPartition []int where each node is originally a singleton. It modifies refinedPartition in place so that new sub clusters might be formed.
 // Vania Halim - 11/29/2025
-
 func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resolution, gamma, theta float64) []int {
+	if len(nodes) <= 1 {
+		return refinedPartition // nothing to refine
+	}
 
 	wellConnectedNodes := g.FindWellConnectedNodes(nodes, partition, gamma) // well connected nodes within a cluster
 	randomNodes := RandomNodeOrder(len(wellConnectedNodes))
@@ -361,7 +366,7 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 			}
 
 			// compute likelihood of moving to a candidate cluster
-			probs := g.ComputeMoveProbability(currNode, wellConnectedClusters, refinedPartition, theta)
+			probs := g.ComputeMoveProbability(currNode, wellConnectedClusters, refinedPartition, theta, resolution)
 
 			// move to one of the candidate clusters based on probabilities computed
 			newCluster := g.SampleCommunity(wellConnectedClusters, probs)
@@ -435,10 +440,69 @@ func (g *Graph) FindWellConnectedClusters(nodes, refinedPartition []int, gamma f
 	return candidates
 }
 
+// SampleCommunity samples a cluster from the given clusters based on the provided probabilities.
+// It takes as input a slice of cluster IDs and a corresponding slice of probabilities. It returns the selected cluster ID.
+// Choose random community C'
+// Qinglin Kong 11/30/2025
+func (g *Graph) SampleCommunity(clusters []int, probs map[int]float64) int {
+	// normalize probabilities
+	total, cumulative := 0.0, 0.0
+	for _, p := range probs {
+		total += p
+	}
+
+	// sample a random number between 0 and total
+	r := rand.Float64() * total
+
+	// v |-> C'
+	for _, c := range clusters {
+		cumulative += probs[c]
+		if r <= cumulative {
+			return c // v |-> C'
+		}
+	}
+
+	return clusters[len(clusters)-1] // fallback
+}
+
+// ComputeMoveProbability computes and maps the clusterID of the new cluster C' to the probability of moving node v into cluster C' for all clusters in the subset S of candidate clusters according to the randomness parameter theta
+// Vania Halim - 11/30/2025
+func (g *Graph) ComputeMoveProbability(currNode int, candidateClusters, refinedPartition []int, theta, resolution float64) map[int]float64 {
+
+	probs := make(map[int]float64) // maps clusterID to the probability of moving into that cluster
+	var sum float64                // for normalization
+
+	// compute probability of moving into each cluster in candidateClusters (unnormalized)
+	for _, c := range candidateClusters {
+
+		dQ := g.ModularityGain(currNode, c, refinedPartition, resolution)
+
+		if dQ < 0 {
+			probs[c] = 0.0
+			continue
+		}
+
+		// otherwise compute the probability
+		p := math.Exp((1 / theta) * dQ) // individual probability of v -> C'
+		probs[c] = p
+		sum += p
+
+	}
+
+	// normalize probabilities
+	if sum > 0 {
+		for key := range probs {
+			probs[key] = probs[key] / sum
+		}
+	}
+
+	return probs
+
+}
+
 // FindWellConnectedNodes
 // Vania Halim - 11/29/2025
 func (g *Graph) FindWellConnectedNodes(nodes, partition []int, gamma float64) []int {
-
 	connected := make([]int, 0)
 	kCluster := g.ClusterDegree(nodes) // total weights
 
@@ -496,7 +560,6 @@ func (g *Graph) EdgesToCluster(node int, cluster []int) float64 {
 // Vania Halim - 11/29/2025
 func (g *Graph) ClusterDegree(nodes []int) float64 {
 	var sum float64
-
 	// range through all nodes in the cluster
 	for _, node := range nodes {
 
@@ -513,7 +576,6 @@ func (g *Graph) ClusterDegree(nodes []int) float64 {
 // Singleton checks whether a given node ID in refinedPartition is the only node in its cluster returning true if so and false otherwise
 // Vania Halim - 11/29/2025
 func Singleton(node int, refinedPartition []int) bool {
-
 	count := 0
 	nodeCluster := refinedPartition[node]
 
@@ -650,17 +712,6 @@ func FindCandidateClusters(node int, edges []Edge, partition []int) []int {
 
 }
 
-// InitSingletonPartition initializes a partition where each node is its own cluster. It returns a slice of integers representing the initial partition.
-// Vania Halim 11/28/2025
-func (g *Graph) InitSingletonPartition() []int {
-	partition := make([]int, g.Nodes)
-	// put each node in its own partition
-	for i := range g.Nodes {
-		partition[i] = i
-	}
-	return partition
-}
-
 // ModularityGain computes the change in modularity by moving node i into the given cluster for a given resolution.
 // Vania Halim 11/28/2025
 func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float64) float64 {
@@ -711,6 +762,58 @@ func (g *Graph) NodeDegree(nodeID int) float64 {
 	}
 
 	return ki
+}
+
+// Aggregate takes as input a partition as a []int mapping node IDs to cluster IDs.
+// It returns a new *Graph where each cluster in the partition is represented as a single node, and the edge weights between clusters are the sum of the edge weights between nodes in the original graph.
+// Qinglin Kong - 11/30/2025
+func (g *Graph) Aggregate(partition []int) *Graph {
+	// v <- p
+	clusters := g.NodesByCluster(partition)
+	numClusters := len(clusters)
+
+	// create new adjacency map for edges between clusters
+	// newAdjacencyMap = clusterU -> (clusterV -> weight)
+	newAdjacencyMap := make(map[int]map[int]float64, numClusters)
+	for c := range clusters {
+		newAdjacencyMap[c] = make(map[int]float64)
+	}
+
+	// range through all edges in the original graph
+	// e <- {(C,D) | (u,v) ∈ E(G), u ∈ C ∈ P, v ∈ D ∈ P}
+	for u, edges := range g.Edges {
+		clusterU := partition[u] // cluster of node u, so u ∈ C
+		for _, e := range edges {
+			v := e.To
+			clusterV := partition[v] // cluster of node v, so v ∈ D
+
+			// add edge weight to the edge between clusterU and clusterV
+			newAdjacencyMap[clusterU][clusterV] += e.Weight
+		}
+	}
+
+	// convert newAdjacencyMap to map[int][]Edge
+	e, totalWeight := make(map[int][]Edge, numClusters), 0.0
+
+	for c, neighbors := range newAdjacencyMap {
+		for d, weight := range neighbors {
+			// skip non-positive weights
+			if weight <= 0 {
+				continue
+			}
+
+			// add edge C -> D
+			e[c] = append(e[c], Edge{To: d, Weight: weight})
+
+			// sum total weight (only count top half to avoid double counting)
+			if c < d {
+				totalWeight += weight
+			}
+		}
+	}
+
+	// retunr G'
+	return &Graph{numClusters, e, totalWeight}
 }
 
 // Copy creates a copy of the given partition slice and returns it.
