@@ -385,7 +385,7 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 // It takes as input a slice of cluster IDs and a corresponding slice of probabilities. It returns the selected cluster ID.
 // Choose random community C'
 // Qinglin Kong 11/30/2025
-func (g *Graph) SampleCommunity(clusters []int, probs []float64) int {
+func (g *Graph) SampleCommunity(clusters []int, probs map[int]float64) int {
 	// normalize probabilities
 	total, cumulative := 0.0, 0.0
 	for _, p := range probs {
@@ -396,14 +396,16 @@ func (g *Graph) SampleCommunity(clusters []int, probs []float64) int {
 	r := rand.Float64() * total
 
 	// v |-> C'
-	for i, p := range probs {
-		cumulative += p
+	for _, c := range clusters {
+		cumulative += probs[c]
 		if r <= cumulative {
-			return clusters[i] // v |-> C'
+			return c // v |-> C'
 		}
 	}
 
 	return clusters[len(clusters)-1] // fallback
+}
+
 // ComputeMoveProbability computes and maps the clusterID of the new cluster C' to the probability of moving node v into cluster C' for all clusters in the subset S of candidate clusters according to the randomness parameter theta
 // Vania Halim - 11/30/2025
 func (g *Graph) ComputeMoveProbability(currNode int, candidateClusters, refinedPartition []int, theta, resolution float64) map[int]float64 {
