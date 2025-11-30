@@ -254,9 +254,12 @@ func (g *Graph) Leiden(resolution float64, maxIter int) []int {
 
 }
 
+// func (g *Graph) Refine(partition []int) []int
+
 // MoveNodes is a *Graph method that iteratively moves nodes in the graph to different communities until no single node moves result in a modularity gain
 // Input: a partition as a slice of integers denoting the cluster for each node and a resolution parameter as a decimal
-// Output: a partition assigning each node to a cluster
+// Output: a partition as a slice of ints where indices are node IDs and the value is the cluster ID
+// Vania Halim - 11/29/2025
 func (g *Graph) MoveNodes(partition []int, resolution float64) []int {
 
 	improved := true
@@ -288,6 +291,10 @@ func (g *Graph) MoveNodes(partition []int, resolution float64) []int {
 
 }
 
+// FindBestCluster identifies the cluster among a node's candidate clusters that would result in the highest modularity gain
+// Input: node as an integer, the undirected graph as a *Graph, slices of integers representing the ids of candidate clusters that node will be moved into, partition as a []int mapping node IDs to clusterIDs, and the resolution parameter as a float64.
+// Output: the cluster ID that results in the highest modularity gain, and a boolean that is true when there is a modularity gain from moving the node into any of the candidate clusters
+// Vania Halim - 11/29/2025
 func FindBestCluster(node int, g *Graph, candidateClusters, partition []int, resolution float64) (int, bool) {
 
 	// initialize maxGain and bestCluster for each node
@@ -314,6 +321,11 @@ func FindBestCluster(node int, g *Graph, candidateClusters, partition []int, res
 	return bestCluster, improved
 
 }
+
+// RandomNodeOrder implements Fisher-Yates swapping on the slice of node IDs, returning a randomized order of node IDs to walk through
+// Input: n, the number of nodes
+// Output: a randomized slice of node IDs
+// Vania Halim - 11/29/2025
 
 func RandomNodeOrder(n int) []int {
 
@@ -414,7 +426,6 @@ func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float
 	return deltaQ
 }
 
-// func (g *Graph) Refine(partition []int) []int
 // func (g *Graph) Aggregate(partition []int) *Graph
 
 // Copy creates a copy of the given partition slice and returns it.
