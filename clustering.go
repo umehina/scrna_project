@@ -292,7 +292,6 @@ func (g *Graph) Refine(partition []int) []int {
 // Output: a refined partition as a []int, which may be further subdivided into different clusters
 // Vania Halim - 11/29/2025
 func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float64) []int {
-
 	n := len(partition)
 
 	refinedPartition := InitSingletonPartition(n) // initialize
@@ -670,6 +669,58 @@ func (g *Graph) NodeDegree(nodeID int) float64 {
 	}
 
 	return ki
+}
+
+// Aggregate takes as input a partition as a []int mapping node IDs to cluster IDs.
+// It returns a new *Graph where each cluster in the partition is represented as a single node, and the edge weights between clusters are the sum of the edge weights between nodes in the original graph.
+// Qinglin Kong - 11/30/2025
+func (g *Graph) Aggregate(partition []int) *Graph {
+	// v <- p
+	clusters := g.NodesByCluster(partition)
+	numClusters := len(clusters)
+
+	// create new adjacency map for edges between clusters
+	// newAdjacencyMap = clusterU -> (clusterV -> weight)
+	newAdjacencyMap := make(map[int]map[int]float64, numClusters)
+	for c := range clusters {
+		newAdjacencyMap[c] = make(map[int]float64)
+	}
+
+	// range through all edges in the original graph
+	// e <- {(C,D) | (u,v) ∈ E(G), u ∈ C ∈ P, v ∈ D ∈ P}
+	for u, edges := range g.Edges {
+		clusterU := partition[u] // cluster of node u, so u ∈ C
+		for _, e := range edges {
+			v := e.To
+			clusterV := partition[v] // cluster of node v, so v ∈ D
+
+			// add edge weight to the edge between clusterU and clusterV
+			newAdjacencyMap[clusterU][clusterV] += e.Weight
+		}
+	}
+
+	// convert newAdjacencyMap to map[int][]Edge
+	e, totalWeight := make(map[int][]Edge, numClusters), 0.0
+
+	for c, neighbors := range newAdjacencyMap {
+		for d, weight := range neighbors {
+			// skip non-positive weights
+			if weight <= 0 {
+				continue
+			}
+
+			// add edge C -> D
+			e[c] = append(e[c], Edge{To: d, Weight: weight})
+
+			// sum total weight (only count top half to avoid double counting)
+			if c < d {
+				totalWeight += weight
+			}
+		}
+	}
+
+	// retunr G'
+	return &Graph{numClusters, e, totalWeight}
 }
 
 // Copy creates a copy of the given partition slice and returns it.
