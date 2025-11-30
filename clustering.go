@@ -326,8 +326,7 @@ func (g *Graph) NodesByCluster(partition []int) map[int][]int {
 
 	for node, cluster := range partition {
 
-		nodes := grouped[cluster]
-		nodes = append(nodes, node)
+		grouped[cluster] = append(grouped[cluster], node)
 
 	}
 
@@ -377,54 +376,59 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 }
 
 // Find Well-connected cluster
-// Amy Ji - 11/30/2025
-func (g *Graph) FindWellConnectedClusters(nodes, refinePartition []int, gamma float64)[]int{
-	// a map of cluster id : []node
-	clusterMembers := make(map[int][]int)
-	for _,v := range nodes {
-		// cid = cluster id
-		cid:=refinePartition[v]
-		clusterMembers[cid]=append(clusterMembers[cid],v)
-	}
+// Amy Ji - 11/30/2025, Vania Halim - 11/30/2025
+func (g *Graph) FindWellConnectedClusters(nodes, refinedPartition []int, gamma float64) []int {
+
+	// a map of cluster id: []node
+	clusterMembers := g.NodesByCluster(nodes)
 
 	//candidates will be a slice of community ID that passes the test
-	candidates := make([]int,0)
+	candidates := make([]int, 0)
 
 	// equation in the paper was: E(C,S\C) >= y*kc(ks-kc)
-	// sum of edge weights between community C and the other nodes in S
-	ks := g.ClusterDegree(nodes)
-	for cid, members := range clusterMembers{
+	ks := g.ClusterDegree(nodes) // sum of edge weights in cluster S
+
+	// sum of edge weights between community C and the other nodes in S: E(C, S\C)
+
+	for cid, members := range clusterMembers {
+
 		kc := g.ClusterDegree(members)
 		if kc == 0 {
 			continue
 		}
+
 		// find nodes that belongs to C
-		inC := make(map[int]struct{},len(members))
+		inC := make(map[int]struct{}, len(members))
 		for _, v := range members {
 			inC[v] = struct{}{}
 		}
+
 		// find members in S minus C (S\C), as we want nodes in S that are not in C
 		sMinusC := make([]int, 0, len(nodes)-len(members))
+
 		// loop over all nodes in S, and if we find one that is not in C, we append ti to sMinusC
-		
-		// This small portion is written by chatGPT
 		for _, v := range nodes {
-			if _, ok := inC[v]; !ok {
+
+			_, exists := inC[v] // check if node v exists in C
+
+			if !exists {
 				sMinusC = append(sMinusC, v)
 			}
+
 		}
-		
+
 		// if sMinusC is zero, that means C==S
-		if len(sMinusC) == 0{
+		if len(sMinusC) == 0 {
 			continue
 		}
+
 		var eCS float64 // eCS stands for total edge weigt between C and S\C
-		for _,v := range members {
+		for _, v := range members {
 			// for each node in C
-			eCS += g.EdgesToCluster(v,sMinusC)
+			eCS += g.EdgesToCluster(v, sMinusC)
 		}
 		if eCS >= gamma*kc*(ks-kc) {
-			candidates = append(candidates,cid)
+			candidates = append(candidates, cid)
 		}
 
 	}
@@ -458,7 +462,7 @@ func (g *Graph) FindWellConnectedNodes(nodes, partition []int, gamma float64) []
 
 }
 
-// EdgesToCluster computes the total edge weights of the node to all nodes in the subset except itself
+// EdgesToCluster computes the total edge weights of the node to all nodes in the subset except itself E(C,S\C)
 // Vania Halim - 11/29/2025
 func (g *Graph) EdgesToCluster(node int, cluster []int) float64 {
 	var sum float64
@@ -645,7 +649,6 @@ func FindCandidateClusters(node int, edges []Edge, partition []int) []int {
 	return candidateClusters
 
 }
-
 
 // InitSingletonPartition initializes a partition where each node is its own cluster. It returns a slice of integers representing the initial partition.
 // Vania Halim 11/28/2025
