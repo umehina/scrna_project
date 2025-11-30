@@ -172,7 +172,7 @@ func topKNeighbors(n []Neighbor, k int) []Neighbor {
 
 // distanceToWeight takes as input a float representing the distance between two nodes. It returns a float representing the weight of the edge connecting the two nodes, calculated as 1 / (1 + distance).
 // This function is used to covert distances into weights for the edges in the KNN graph, where smaller distances correspond to stornger connections (higher weights).
-// Qinlgin K0ng 11/29/2025
+// Qinglin Kong 11/29/2025
 func distanceToWeight(distance float64) float64 {
 	return 1.0 / (1.0 + distance)
 }
@@ -338,6 +338,9 @@ func (g *Graph) NodesByCluster(partition []int) map[int][]int {
 // Vania Halim - 11/29/2025
 
 func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resolution, gamma, theta float64) []int {
+	if len(nodes) <= 1 {
+		return refinedPartition // nothing to refine
+	}
 
 	wellConnectedNodes := g.FindWellConnectedNodes(nodes, partition, gamma) // well connected nodes within a cluster
 	randomNodes := RandomNodeOrder(len(wellConnectedNodes))
@@ -376,10 +379,34 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 	return refinedPartition
 }
 
+// SampleCommunity samples a cluster from the given clusters based on the provided probabilities.
+// It takes as input a slice of cluster IDs and a corresponding slice of probabilities. It returns the selected cluster ID.
+// Choose random community C'
+// Qinglin Kong 11/30/2025
+func (g *Graph) SampleCommunity(clusters []int, probs []float64) int {
+	// normalize probabilities
+	total, cumulative := 0.0, 0.0
+	for _, p := range probs {
+		total += p
+	}
+
+	// sample a random number between 0 and total
+	r := rand.Float64() * total
+
+	// v |-> C'
+	for i, p := range probs {
+		cumulative += p
+		if r <= cumulative {
+			return clusters[i] // v |-> C'
+		}
+	}
+
+	return clusters[len(clusters)-1] // fallback
+}
+
 // FindWellConnectedNodes
 // Vania Halim - 11/29/2025
 func (g *Graph) FindWellConnectedNodes(nodes, partition []int, gamma float64) []int {
-
 	connected := make([]int, 0)
 	kCluster := g.ClusterDegree(nodes) // total weights
 
@@ -437,7 +464,6 @@ func (g *Graph) EdgesToCluster(node int, cluster []int) float64 {
 // Vania Halim - 11/29/2025
 func (g *Graph) ClusterDegree(nodes []int) float64 {
 	var sum float64
-
 	// range through all nodes in the cluster
 	for _, node := range nodes {
 
@@ -454,7 +480,6 @@ func (g *Graph) ClusterDegree(nodes []int) float64 {
 // Singleton checks whether a given node ID in refinedPartition is the only node in its cluster returning true if so and false otherwise
 // Vania Halim - 11/29/2025
 func Singleton(node int, refinedPartition []int) bool {
-
 	count := 0
 	nodeCluster := refinedPartition[node]
 
