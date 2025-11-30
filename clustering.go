@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"math/rand"
 	"sort"
 
 	"gonum.org/v1/gonum/mat"
@@ -177,7 +178,7 @@ func distanceToWeight(distance float64) float64 {
 }
 
 // symmetrizeWeightsUsing takes as input a pointer to a mat.Dense representing the directed KNN weights between nodes. It returns a map[int][]Edge representing the undirected edges of the graph, where each key is a node index and the value is a slice of Edge structs representing the edges connected to that node.
-// Qinglin Kong 11/29/2025
+// Qinglin Kong 11/29/2025, Vania Halim 11/29/2025
 func symmetrizeWeightsUsing(directed *mat.Dense) (map[int][]Edge, float64) {
 	row, _ := directed.Dims()
 	edges := make(map[int][]Edge) // final undirected adjacency map
@@ -253,6 +254,114 @@ func (g *Graph) Leiden(resolution float64, maxIter int) []int {
 
 }
 
+// MoveNodes is a *Graph method that iteratively moves nodes in the graph to different communities until no single node moves result in a modularity gain
+// Input: a partition as a slice of integers denoting the cluster for each node and a resolution parameter as a decimal
+// Output: a partition assigning each node to a cluster
+func (g *Graph) MoveNodes(partition []int, resolution float64) []int {
+
+	improved := true
+
+	for improved {
+
+		improved = false
+
+		random := RandomNodeOrder(len(partition))
+
+		// move each node order[i]
+		for _, i := range random {
+
+			var nodeImproved bool // true if single node improvement resulted in a modularity gain
+
+			// find candidate clusters - clusters that node i's neighbors belong to, excluding node i's own cluster
+			candidateClusters := FindCandidateClusters(i, g.Edges[i], partition)
+			partition[i], nodeImproved = FindBestCluster(i, g, candidateClusters, partition, resolution)
+
+			if nodeImproved {
+				improved = true
+			}
+
+		}
+
+	}
+
+	return partition
+
+}
+
+func FindBestCluster(node int, g *Graph, candidateClusters, partition []int, resolution float64) (int, bool) {
+
+	// initialize maxGain and bestCluster for each node
+	var maxGain float64
+	currCluster := partition[node]
+	bestCluster := currCluster
+
+	// range through each cluster in candidateClusters
+	for _, cluster := range candidateClusters {
+
+		// find deltaQ of moving node i to each cluster in candidateClusters
+		gain := g.ModularityGain(node, cluster, partition, resolution)
+
+		// update maxGain and bestCluster if needed
+		if gain > maxGain {
+			maxGain = gain
+			bestCluster = cluster
+		}
+
+	}
+
+	improved := (bestCluster != currCluster)
+
+	return bestCluster, improved
+
+}
+
+func RandomNodeOrder(n int) []int {
+
+	// initialize slice of nodeIDs in order
+	nodes := make([]int, n)
+	for i := range nodes {
+		nodes[i] = i
+	}
+
+	// randomize nodes order
+	randomized := make([]int, n)
+	for i := n - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		nodes[i], nodes[j] = nodes[j], nodes[i]
+	}
+
+	return randomized
+
+}
+
+// FindCandidateClusters returns the candidate clusters that node i can move into based on its neighbors
+// Input: a node id i as an integer, node i's edges as a []Edge, and a partition as a []int mapping node id to cluster id
+// Output: a []int where each value is the id of a cluster that node i could move to, excluding itself
+// Vania Halim 11/29/2025
+
+func FindCandidateClusters(node int, edges []Edge, partition []int) []int {
+
+	// identify candidate clusters from neighbors of the current Node
+	candidateClusters := make([]int, 0)
+	currCluster := partition[node]
+
+	for _, e := range edges {
+
+		neighborCluster := partition[e.To]
+
+		// skip if the neighbor's cluster is the same as the node's cluster
+		if neighborCluster == currCluster {
+			continue
+		}
+
+		// else add that cluster to the list of candidate clusters
+		candidateClusters = append(candidateClusters, neighborCluster)
+	}
+
+	return candidateClusters
+
+}
+
 // InitSingletonPartition initializes a partition where each node is its own cluster. It returns a slice of integers representing the initial partition.
 // Vania Halim 11/28/2025
 func (g *Graph) InitSingletonPartition() []int {
@@ -305,7 +414,6 @@ func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float
 	return deltaQ
 }
 
-// func (g *Graph) MoveNodes(partition []int, resolution float64) []int
 // func (g *Graph) Refine(partition []int) []int
 // func (g *Graph) Aggregate(partition []int) *Graph
 
