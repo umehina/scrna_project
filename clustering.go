@@ -305,17 +305,21 @@ func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float6
 	return refinedPartition
 }
 
-// InitSingletonPartition takes an integer n and returns a slice []int of n nodes mapped to their own clusters
+// InitSingletonPartition takes as input an integer n representing the number of nodes. It returns a slice of integers of length n where each node is assigned to its own unique cluster.
 // Vania Halim - 11/29/2025
 func InitSingletonPartition(n int) []int {
-
 	partition := make([]int, n)
 	// put each node in its own partition
 	for i := range partition {
 		partition[i] = i
 	}
 	return partition
+}
 
+// (g *Graph) InitSingletonPartition() takes no input and returns a slice []int of length g.Nodes where each node is mapped to its own cluster
+// Qinglin Kong - 11/30/2025
+func (g *Graph) InitSingletonPartition() []int {
+	return InitSingletonPartition(g.Nodes)
 }
 
 // NodesByCluster takes a partition as a []int and returns a mapping of cluster IDs []int containing nodes belonging to that clusterID
@@ -614,17 +618,6 @@ func FindCandidateClusters(node int, edges []Edge, partition []int) []int {
 
 	return candidateClusters
 
-}
-
-// InitSingletonPartition initializes a partition where each node is its own cluster. It returns a slice of integers representing the initial partition.
-// Vania Halim 11/28/2025
-func (g *Graph) InitSingletonPartition() []int {
-	partition := make([]int, g.Nodes)
-	// put each node in its own partition
-	for i := range g.Nodes {
-		partition[i] = i
-	}
-	return partition
 }
 
 // ModularityGain computes the change in modularity by moving node i into the given cluster for a given resolution.
