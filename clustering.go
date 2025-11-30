@@ -355,7 +355,7 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 			}
 
 			// only process singleton nodes
-			wellConnectedClusters := g.FindCandidateClusters(currNode, nodes, refinedPartition, gamma)
+			wellConnectedClusters := g.FindWellConnectedClusters(nodes, refinedPartition, gamma)
 
 			if len(wellConnectedClusters) == 0 { // nonzero number of candidate clusters
 				continue
@@ -374,6 +374,61 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 	}
 
 	return refinedPartition
+}
+
+// Find Well-connected cluster
+// Amy Ji - 11/30/2025
+func (g *Graph) FindWellConnectedClusters(nodes, refinePartition []int, gamma float64)[]int{
+	// a map of cluster id : []node
+	clusterMembers := make(map[int][]int)
+	for _,v := range nodes {
+		// cid = cluster id
+		cid:=refinePartition[v]
+		clusterMembers[cid]=append(clusterMembers[cid],v)
+	}
+
+	//candidates will be a slice of community ID that passes the test
+	candidates := make([]int,0)
+
+	// equation in the paper was: E(C,S\C) >= y*kc(ks-kc)
+	// sum of edge weights between community C and the other nodes in S
+	ks := g.ClusterDegree(nodes)
+	for cid, members := range clusterMembers{
+		kc := g.ClusterDegree(members)
+		if kc == 0 {
+			continue
+		}
+		// find nodes that belongs to C
+		inC := make(map[int]struct{},len(members))
+		for _, v := range members {
+			inC[v] = struct{}{}
+		}
+		// find members in S minus C (S\C), as we want nodes in S that are not in C
+		sMinusC := make([]int, 0, len(nodes)-len(members))
+		// loop over all nodes in S, and if we find one that is not in C, we append ti to sMinusC
+		
+		// This small portion is written by chatGPT
+		for _, v := range nodes {
+			if _, ok := inC[v]; !ok {
+				sMinusC = append(sMinusC, v)
+			}
+		}
+		
+		// if sMinusC is zero, that means C==S
+		if len(sMinusC) == 0{
+			continue
+		}
+		var eCS float64 // eCS stands for total edge weigt between C and S\C
+		for _,v := range members {
+			// for each node in C
+			eCS += g.EdgesToCluster(v,sMinusC)
+		}
+		if eCS >= gamma*kc*(ks-kc) {
+			candidates = append(candidates,cid)
+		}
+
+	}
+	return candidates
 }
 
 // FindWellConnectedNodes
@@ -590,6 +645,7 @@ func FindCandidateClusters(node int, edges []Edge, partition []int) []int {
 	return candidateClusters
 
 }
+
 
 // InitSingletonPartition initializes a partition where each node is its own cluster. It returns a slice of integers representing the initial partition.
 // Vania Halim 11/28/2025
