@@ -336,7 +336,6 @@ func (g *Graph) NodesByCluster(partition []int) map[int][]int {
 
 // MergeNodesSubset takes as input a refinedPartition []int where each node is originally a singleton. It modifies refinedPartition in place so that new sub clusters might be formed.
 // Vania Halim - 11/29/2025
-
 func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resolution, gamma, theta float64) []int {
 
 	wellConnectedNodes := g.FindWellConnectedNodes(nodes, partition, gamma) // well connected nodes within a cluster
@@ -355,14 +354,14 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 			}
 
 			// only process singleton nodes
-			wellConnectedClusters := g.FindCandidateClusters(currNode, nodes, refinedPartition, gamma)
+			wellConnectedClusters := g.FindWellConnectedClusters(currNode, nodes, refinedPartition, gamma)
 
 			if len(wellConnectedClusters) == 0 { // nonzero number of candidate clusters
 				continue
 			}
 
 			// compute likelihood of moving to a candidate cluster
-			probs := g.ComputeMoveProbability(currNode, wellConnectedClusters, refinedPartition, theta)
+			probs := g.ComputeMoveProbability(currNode, wellConnectedClusters, refinedPartition, theta, resolution)
 
 			// move to one of the candidate clusters based on probabilities computed
 			newCluster := g.SampleCommunity(wellConnectedClusters, probs)
@@ -374,6 +373,41 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 	}
 
 	return refinedPartition
+}
+
+// ComputeMoveProbability computes and maps the clusterID of the new cluster C' to the probability of moving node v into cluster C' for all clusters in the subset S of candidate clusters according to the randomness parameter theta
+// Vania Halim - 11/30/2025
+func (g *Graph) ComputeMoveProbability(currNode int, candidateClusters, refinedPartition []int, theta, resolution float64) map[int]float64 {
+
+	probs := make(map[int]float64) // maps clusterID to the probability of moving into that cluster
+	var sum float64                // for normalization
+
+	// compute probability of moving into each cluster in candidateClusters (unnormalized)
+	for _, c := range candidateClusters {
+
+		dQ := g.ModularityGain(currNode, c, refinedPartition, resolution)
+
+		if dQ < 0 {
+			probs[c] = 0.0
+			continue
+		}
+
+		// otherwise compute the probability
+		p := math.Exp((1 / theta) * dQ) // individual probability of v -> C'
+		probs[c] = p
+		sum += p
+
+	}
+
+	// normalize probabilities
+	if sum > 0 {
+		for key := range probs {
+			probs[key] = probs[key] / sum
+		}
+	}
+
+	return probs
+
 }
 
 // FindWellConnectedNodes
