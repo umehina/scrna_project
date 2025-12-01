@@ -9,6 +9,12 @@ import (
 	"testing"
 )
 
+type testSampleBlock struct {
+	name     string
+	input    []string
+	expected []string
+}
+
 // parseTestFile parses a test file into testSampleBlocks.
 // It takes in a file path and returns a slice of testSampleBlock structs, each containing input and expected slices of strings.
 func parseTestFile(path string) ([]testSampleBlock, error) {

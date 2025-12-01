@@ -19,12 +19,6 @@ type QCMetrics struct {
 	percentMT   float64 // fraction 0..1
 }
 
-type testSampleBlock struct {
-	name     string
-	input    []string
-	expected []string
-}
-
 type ExpressionMatrix struct {
 	data     [][]float64
 	genes    []string
