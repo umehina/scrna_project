@@ -54,19 +54,17 @@ func DistanceMatrix(data *mat.Dense) *mat.Dense {
 
 	// calculate and store euclidean distance of each cell in distMtx
 	for r := range rows {
-		cellDistance := make([]float64, rows)
+		// the diagonal is always zero
 		cellOne := data.RawRowView(r)
+		distMtx.Set(r, r, 0)
 
-		for c := range rows {
+		for c := r + 1; c < rows; c++ {
 			cellTwo := data.RawRowView(c)
-
 			// calculate EuclideanDistance between two cells and add it to the cell's total cellDistance
-			cellDistance[c] = Euclidean(cellOne, cellTwo)
-
+			distance := Euclidean(cellOne, cellTwo)
+			distMtx.Set(r, c, distance)
+			distMtx.Set(c, r, distance)
 		}
-
-		// set the cell's euclidean distance
-		distMtx.SetRow(r, cellDistance)
 	}
 
 	return distMtx
