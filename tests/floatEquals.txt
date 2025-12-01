@@ -1,0 +1,41 @@
+floatEquals
+
+# Sample Input 1: exact equality
+0 0 0
+@ Sample Output 1:
+true
+
+# Sample Input 2: difference exactly at tolerance boundary
+1 1.000001 0.000001
+@ Sample Output 2:
+true
+
+# Sample Input 3: difference just above tolerance
+1 1.000002 0.000001
+@ Sample Output 3:
+false
+
+# Sample Input 4: negative numbers within tolerance
+-1 -1.000001 0.000001
+@ Sample Output 4:
+true
+
+# Sample Input 5: very large but equal numbers
+1e20 1e20 0
+@ Sample Output 5:
+true
+
+# Sample Input 6: small difference allowed
+0 1e-9 1e-9
+@ Sample Output 6:
+true
+
+# Sample Input 7: small difference not allowed
+0 1e-9 1e-10
+@ Sample Output 7:
+false
+
+# Sample Input 8: negative tolerance (always false)
+0 0 -1
+@ Sample Output 8:
+false

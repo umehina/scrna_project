@@ -1,3 +1,4 @@
+// helpers.go
 package main
 
 import (
@@ -202,4 +203,10 @@ func Variance(vals []float64, mean float64) float64 {
 // Std computes the standard deviation from variance.
 func Std(variance float64) float64 {
 	return math.Sqrt(variance)
+}
+
+// floatEquals checks if two floats are equal within a tolerance.
+// It takes in two float a, b and a tolerance tol. It returns true if the absolute difference between a and b is less than or equal to tol.
+func floatEquals(a, b, tol float64) bool {
+	return math.Abs(a-b) <= tol
 }
