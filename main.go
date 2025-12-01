@@ -24,7 +24,7 @@ func main() {
 	fmt.Println(" done.")
 
 	fmt.Print("Normalizing...")
-	em.LogNormalize(1e6)
+	em.Pearson(filtered,100)
 	fmt.Println(" done.")
 
 	fmt.Print("Scaling...")
@@ -50,7 +50,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	PlotTSNE(tsneResult.scores,"tsne.png")
+	t_title:="tsne"
+	t_xlabel:="tsne_1"
+	t_ylabel:="tsne_2"
+	PlotEmb(tsneResult.scores,"tsne.png",t_title,t_xlabel,t_ylabel )
 	fmt.Println("TSNE plot saved as tsne.png")
 	
 	// ================== Run UMAP ====================
@@ -72,6 +75,9 @@ func main() {
 	}
 
 	fmt.Println("Plotting UMAP")
-	PlotTSNE(umapResult,"umap.png")
+	u_title:="umap"
+	u_xlabel:="umap_1"
+	u_ylabel:="umap_2"
+	PlotEmb(umapResult,"umap.png", u_title,u_xlabel,u_ylabel)
 
 }
