@@ -23,6 +23,7 @@ type testSampleBlock struct {
 	name     string
 	input    []string
 	expected []string
+}
 
 type ExpressionMatrix struct {
 	data     [][]float64
