@@ -23,13 +23,15 @@ func main() {
 	em, _, _ := BuildMatrix(filtered)
 	fmt.Println(" done.")
 
-	fmt.Print("Normalizing...")
-	em.LogNormalize(1e6)
-	fmt.Println(" done.")
+	// normalized := em.Pearson(100)
 
-	fmt.Print("Scaling...")
+	// fmt.Print("Normalizing...")
+	em.LogNormalize(1e6)
+	// fmt.Println(" done.")
+
+	// fmt.Print("Scaling...")
 	em.ScaleData(10)
-	fmt.Println(" done.")
+	// fmt.Println(" done.")
 
 	fmt.Print("Running PCA...")
 	pcs := em.PCA(2)
