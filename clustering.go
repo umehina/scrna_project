@@ -663,25 +663,20 @@ func FindBestCluster(node int, g *Graph, candidateClusters, partition []int, res
 // RandomNodeOrder implements Fisher-Yates swapping on the slice of node IDs, returning a randomized order of node IDs to walk through
 // Input: n, the number of nodes
 // Output: a randomized slice of node IDs
-// Vania Halim - 11/29/2025
-
+// Vania Halim - 11/29/2025; Qinglin Kong - 12/4/2025
 func RandomNodeOrder(n int) []int {
-
 	// initialize slice of nodeIDs in order
 	nodes := make([]int, n)
 	for i := range nodes {
 		nodes[i] = i
 	}
 
-	// randomize nodes order
-	randomized := make([]int, n)
 	for i := n - 1; i > 0; i-- {
 		j := rand.Intn(i + 1)
 		nodes[i], nodes[j] = nodes[j], nodes[i]
 	}
 
-	return randomized
-
+	return nodes
 }
 
 // FindCandidateClusters returns the candidate clusters that node i can move into based on its neighbors
