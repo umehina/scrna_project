@@ -10,7 +10,7 @@ import (
 )
 
 // PlotTSNE draws a 2D t-SNE embedding stored as an n×2 matrix.
-func PlotTSNE(embedding *mat.Dense, filename string) error {
+func PlotEmb(embedding *mat.Dense, filename string, title, xaxislabel,yaxislabel string) error {
     r, c := embedding.Dims()
     if c != 2 {
         return fmt.Errorf("PlotTSNE: matrix must be n×2, got %d×%d", r, c)
@@ -24,9 +24,9 @@ func PlotTSNE(embedding *mat.Dense, filename string) error {
     }
 
     p := plot.New()
-    p.Title.Text = "t-SNE Embedding"
-    p.X.Label.Text = "t-SNE 1"
-    p.Y.Label.Text = "t-SNE 2"
+    p.Title.Text = title
+    p.X.Label.Text = xaxislabel
+    p.Y.Label.Text = yaxislabel
 
     scatter, err := plotter.NewScatter(pts)
     if err != nil {
