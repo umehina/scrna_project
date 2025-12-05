@@ -60,7 +60,7 @@ func DistanceMatrix(data *mat.Dense) *mat.Dense {
 
 		for c := r + 1; c < rows; c++ {
 			cellTwo := data.RawRowView(c)
-			// calculate EuclideanDistance between two cells and add it to the cell's total cellDistance
+			// calculate Euclidean distance between two cells and set it in the matrix
 			distance := Euclidean(cellOne, cellTwo)
 			distMtx.Set(r, c, distance)
 			distMtx.Set(c, r, distance)
