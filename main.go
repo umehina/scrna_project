@@ -3,8 +3,221 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
+	"flag"
 	
 )
+
+// config struct for RShiny app
+// Amy Ji - 12/04/2025
+type PipelineConfig struct {
+    DataPath string
+
+    // QC filter params
+    minFeatures int
+    maxFeatures int
+    minCounts   int
+    maxCounts   int
+    maxPercentMT  float64
+
+    // Normalization / scaling
+    NormMethod  string  // "pearson" or "lognorm"
+    PearsonK    float64 //theta
+    ScaleFactor float64
+
+    // PCA
+    UsePCA  bool // Turn PCA ON or OFF.
+    NumPCs  int
+    PCAX    int
+    PCAY    int
+    PCAPlot string
+
+    // Embedding
+    EmbedMethod string // "tsne" or "umap"
+
+    // t-SNE
+    TSNEDims       int
+    TSNEPerplexity float64
+    TSNETheta      float64
+    TSNEIter       int
+    TSNEPlot       string
+
+    // UMAP
+    UMAPNeighbors int
+    UMAPMinDist   float64
+    UMAPMetric    string
+    UMAPPlot      string
+
+    // Output filenames
+    PCAScoresCSV string
+    UMAPOutCSV   string
+}
+
+// runPipeline added switchcase property to the original main func to support Rshiny integration.
+// Amy Ji (and ChatGPT) - 12/04/2025
+func runPipeline(cfg PipelineConfig) error {
+    dataset, err := ParseCountMatrixFromFile(cfg.DataPath)
+    if err != nil {
+        return fmt.Errorf("parse count matrix: %w", err)
+    }
+    dataset.ImportSummary()
+
+    filtered := dataset.FilterBy(
+        cfg.minFeatures,
+        cfg.maxFeatures,
+        cfg.minCounts,
+        cfg.maxCounts,
+        cfg.maxPercentMT,
+    )
+    filtered.ImportSummary()
+
+    fmt.Print("Building em...")
+    em, _, _ := BuildMatrix(filtered)
+    fmt.Println(" done.")
+
+    // ---------- NORMALIZATION SWITCH ----------
+    var normalized *ExpressionMatrix
+    switch strings.ToLower(cfg.NormMethod) {
+    case "pearson":
+        fmt.Println("Normalizing with Pearson residuals...")
+        normalized = em.Pearson(cfg.PearsonK)
+    case "lognorm":
+        fmt.Println("Normalizing with log-normalization...")
+        normalized = em.LogNormalize(cfg.ScaleFactor)
+    default:
+        return fmt.Errorf("unknown normalization method: %q", cfg.NormMethod)
+    }
+    if normalized == nil {
+        return fmt.Errorf("normalization produced nil ExpressionMatrix")
+    }
+    fmt.Println("Normalization done.")
+
+    fmt.Print("Scaling...")
+    normalized.ScaleData(cfg.ScaleFactor)
+    fmt.Println(" done.")
+
+    // ---------- DIMENSION REDUCTION + EMBEDDING ----------
+    if cfg.UsePCA {
+        // PCA path
+        fmt.Print("Running PCA...")
+        pcs := normalized.PCA(cfg.NumPCs)
+        fmt.Println(" done.")
+        fmt.Println("PC variances:", pcs.variances)
+
+        fmt.Println("Plotting PCA...")
+        if err := pcs.PlotPCAScatter(cfg.PCAPlot, cfg.PCAX, cfg.PCAY); err != nil {
+            return fmt.Errorf("plot PCA: %w", err)
+        }
+        fmt.Println("PCA plot saved as", cfg.PCAPlot)
+
+        switch strings.ToLower(cfg.EmbedMethod) {
+        case "tsne":
+            if err := runTSNEOnDense(pcs.scores, cfg); err != nil {
+                return err
+            }
+        case "umap":
+            if err := runUMAPOnDense(pcs.scores, cfg); err != nil {
+                return err
+            }
+        case "both":
+            if err := runTSNEOnDense(pcs.scores, cfg); err != nil {
+                return err
+            }
+            if err := runUMAPOnDense(pcs.scores, cfg); err != nil {
+                return err
+            }
+        default:
+            return fmt.Errorf("unknown embed method: %q", cfg.EmbedMethod)
+        }
+
+    } else {
+        // No PCA: work directly on normalized ExpressionMatrix.
+        X := normalized.ToDense()
+
+        switch strings.ToLower(cfg.EmbedMethod) {
+        case "tsne":
+            if err := runTSNEOnDense(X, cfg); err != nil {
+                return err
+            }
+        case "umap":
+            if err := runUMAPOnDense(X, cfg); err != nil {
+                return err
+            }
+        case "both":
+            if err := runTSNEOnDense(X, cfg); err != nil {
+                return err
+            }
+            if err := runUMAPOnDense(X, cfg); err != nil {
+                return err
+            }
+        default:
+            return fmt.Errorf("unknown embed method: %q", cfg.EmbedMethod)
+        }
+    }
+
+    return nil
+}
+
+
+
+
+// Amy Ji (mostly Chatgpt) -12/04/2025
+// for Rshiny app
+func main() {
+    var cfg PipelineConfig
+
+    // ---------- Data / QC ----------
+    flag.StringVar(&cfg.DataPath, "data", "data/scRNA_dataset.csv", "path to count matrix CSV")
+
+    flag.IntVar(&cfg.minFeatures, "minFeatures", 200, "minimum features (genes) per cell")
+    flag.IntVar(&cfg.maxFeatures, "maxFeatures", 2500, "maximum features (genes) per cell")
+    flag.IntVar(&cfg.minCounts, "minCounts", 500, "minimum counts per cell")
+    flag.IntVar(&cfg.maxCounts, "maxCounts", 5000, "maximum counts per cell")
+    flag.Float64Var(&cfg.maxPercentMT, "maxPercentMT", 0.05, "maximum mitochondrial fraction (0–1)")
+
+    // ---------- Normalization / scaling ----------
+    flag.StringVar(&cfg.NormMethod, "norm", "pearson", "normalization method: pearson|lognorm")
+    flag.Float64Var(&cfg.PearsonK, "pearsonK", 100.0, "Pearson residual K (theta)")
+    flag.Float64Var(&cfg.ScaleFactor, "scaleFactor", 10, "scale factor for scaling")
+
+    // ---------- PCA ----------
+    flag.BoolVar(&cfg.UsePCA, "usePCA", true, "whether to run PCA before embedding")
+    flag.IntVar(&cfg.NumPCs, "pcs", 50, "number of principal components")
+    flag.IntVar(&cfg.PCAX, "pcax", 0, "PCA x-axis PC index (0-based)")
+    flag.IntVar(&cfg.PCAY, "pcay", 1, "PCA y-axis PC index (0-based)")
+    flag.StringVar(&cfg.PCAPlot, "pcaPlot", "pca.png", "output PCA plot filename")
+
+    // ---------- Embedding choice ----------
+    flag.StringVar(&cfg.EmbedMethod, "embed", "tsne", "embedding method: tsne|umap|both")
+
+    // ---------- t-SNE ----------
+    flag.IntVar(&cfg.TSNEDims, "tsneDims", 2, "t-SNE output dimensions")
+    flag.Float64Var(&cfg.TSNEPerplexity, "tsnePerplexity", 30, "t-SNE perplexity")
+    flag.Float64Var(&cfg.TSNETheta, "tsneTheta", 200, "t-SNE learning rate / theta")
+    flag.IntVar(&cfg.TSNEIter, "tsneIter", 1000, "t-SNE max iterations")
+    flag.StringVar(&cfg.TSNEPlot, "tsnePlot", "tsne.png", "output t-SNE plot filename")
+
+    // ---------- UMAP ----------
+    flag.IntVar(&cfg.UMAPNeighbors, "umapNeighbors", 30, "UMAP n_neighbors")
+    flag.Float64Var(&cfg.UMAPMinDist, "umapMinDist", 0.3, "UMAP min_dist")
+    flag.StringVar(&cfg.UMAPMetric, "umapMetric", "euclidean", "UMAP distance metric")
+    flag.StringVar(&cfg.UMAPPlot, "umapPlot", "umap.png", "output UMAP plot filename")
+
+    // CSV paths for UMAP I/O
+    flag.StringVar(&cfg.PCAScoresCSV, "pcaScores", "pca_scores.csv", "CSV file for UMAP input")
+    flag.StringVar(&cfg.UMAPOutCSV, "umapOut", "umap_out.csv", "CSV file for UMAP output")
+
+    flag.Parse()
+
+    if err := runPipeline(cfg); err != nil {
+        log.Fatalf("pipeline error: %v", err)
+    }
+}
+
+
+
+// Old func main (Keep for now)
+/*
 //Amy Ji - 11/1/2025
 func main() {
 	// load dataset, returns CountMatrix struct
@@ -24,7 +237,7 @@ func main() {
 	fmt.Println(" done.")
 
 	fmt.Print("Normalizing...")
-	em.Pearson(filtered,100)
+	normalized := em.Pearson(100)
 	fmt.Println(" done.")
 
 	fmt.Print("Scaling...")
@@ -33,7 +246,7 @@ func main() {
 
 	// ================ Run PCA ====================
 	fmt.Print("Running PCA...")
-	pcs := em.PCA(30)
+	pcs := normalized.PCA(50)
 	fmt.Println(" done.")
 	fmt.Println("PC variances:", pcs.variances)
 
@@ -81,3 +294,4 @@ func main() {
 	PlotEmb(umapResult,"umap.png", u_title,u_xlabel,u_ylabel)
 
 }
+*/
