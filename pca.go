@@ -97,6 +97,11 @@ func (em *ExpressionMatrix) PCA(k int) *PCAResult {
 	return pcaResult
 }
 
+// GetScores returns the PCA scores matrix (cell embeddings)
+func (p *PCAResult) GetScores() *mat.Dense {
+	return p.scores
+}
+
 // GetPC returns the j-th principal component (0-indexed) as a slice of float64.
 func (p *PCAResult) GetPC(j int) []float64 {
 	rows, _ := p.scores.Dims()
