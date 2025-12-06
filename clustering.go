@@ -1,9 +1,14 @@
 package main
 
 import (
+	"encoding/csv"
+	"fmt"
 	"math"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"sort"
+	"strconv"
 
 	"gonum.org/v1/gonum/mat"
 )
@@ -24,24 +29,104 @@ type Neighbor struct {
 	Distance float64
 }
 
-func (em *ExpressionMatrix) Cluster(k int, pcs *mat.Dense) {
-	// First, we create a distance matrix based on the cells
-	// Next, we connect each cell on the distance matrix to its K most similar cells using Leiden.
+/*
+	resolution := 0.8 // controls # of communities
+	gamma := 0.5 //
+	theta := 0.01 // controls randomness
+	maxIter := 10 // max # of iterations allowed for collapsing the graph
+*/
 
-	// The KNN graph reflects the underlying topology of the expression data by representing dense regions with respect to expression space also as densely connected regions in the graph
+// RunLeiden takes the normalized and reduced data as a *mat.Dense object, along with parameters k (nearest neighbors), max iterations, and Leiden parameters resolution, gamma, and theta as floats.
+// Output: the cluster labels as a []int, the original graph as a *Graph
+// Vania Halim - 12/4/2025
+func RunLeiden(data *mat.Dense, k, maxIter int, resolution, gamma, theta float64) (*Graph, []int) {
 
-	// The starting point is a singleton partition in which each node functions as its own community (a).
-	// As a next step, the algorithm creates partitions by moving individual nodes from one community to another (b), which is refined afterwards to enhance the partitioning (c).
-	// The refined partition is then aggregated to a network (d).
-	// Subsequently, the algorithm moves again individual nodes in the aggregate network (e), until refinement does no longer change the partition (f).
-	// All steps are repeated until the final clustering is created and partitions no longer change.
+	// build a Euclidean Distance Matrix
+	distMtx := DistanceMatrix(data)
 
-	// build a knn graph from the pcs and k
-	// g := BuildKNNGraph(pcs, k)
-	// un leiden clustering on the graph
-	// communities := g.Leiden()
+	// convert distance matrix to a graph where each cell is connected to its k nearest neighbors
+	g := BuildKNNGraph(distMtx, k)
 
-	// return communities
+	// run Leiden. The function internally creates a copy of g
+	clusteredNodes := g.Leiden(resolution, gamma, theta, maxIter)
+
+	// return the KNN graph and cluster labels to be exported into R
+	return g, clusteredNodes
+
+}
+
+// ExportLeiden exports the KNN graph, cluster labels, and PCA coordinates for R visualization
+// Vania Halim - 12/4/2025
+func ExportLeiden(g *Graph, clusters []int, pcaCoords *mat.Dense) {
+
+	// ensure R directory exists and save files there for R plotting
+	dir := "R"
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+
+	// Export edge list for the original graph (undirected edges are represented twice)
+	edgesFile := filepath.Join(dir, "leiden_export_edges.csv")
+	f, err := os.Create(edgesFile)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	w := csv.NewWriter(f)
+	defer w.Flush()
+
+	// write header
+	_ = w.Write([]string{"from", "to", "weight"})
+	for from, edgeList := range g.Edges {
+		for _, e := range edgeList {
+			// write 1-based node indices for easier use in R
+			_ = w.Write([]string{strconv.Itoa(from + 1), strconv.Itoa(e.To + 1), strconv.FormatFloat(e.Weight, 'g', -1, 64)})
+		}
+	}
+
+	// Export PCA coordinates (for UMAP-like visualization)
+	coordsFile := filepath.Join(dir, "leiden_export_coords.csv")
+	f3, err := os.Create(coordsFile)
+	if err != nil {
+		return
+	}
+	defer f3.Close()
+	w3 := csv.NewWriter(f3)
+	defer w3.Flush()
+
+	rows, cols := pcaCoords.Dims()
+	// write header
+	header := []string{"node"}
+	for i := 0; i < cols; i++ {
+		header = append(header, "PC"+strconv.Itoa(i+1))
+	}
+	_ = w3.Write(header)
+
+	// write each cell's coordinates
+	for i := 0; i < rows; i++ {
+		row := []string{strconv.Itoa(i + 1)} // 1-based node index
+		for j := 0; j < cols; j++ {
+			row = append(row, strconv.FormatFloat(pcaCoords.At(i, j), 'g', -1, 64))
+		}
+		_ = w3.Write(row)
+	}
+
+	// Export cluster labels
+	labelsFile := filepath.Join(dir, "leiden_export_labels.csv")
+	f2, err := os.Create(labelsFile)
+	if err != nil {
+		return
+	}
+	defer f2.Close()
+	w2 := csv.NewWriter(f2)
+	defer w2.Flush()
+
+	_ = w2.Write([]string{"node", "cluster"})
+	for i, c := range clusters {
+		// output 1-based node index and 1-based cluster id
+		_ = w2.Write([]string{strconv.Itoa(i + 1), strconv.Itoa(c + 1)})
+	}
+
 }
 
 // ==================== Building a Distance Matrix ====================
@@ -53,11 +138,11 @@ func DistanceMatrix(data *mat.Dense) *mat.Dense {
 	distMtx := mat.NewDense(rows, rows, nil)
 
 	// calculate and store euclidean distance of each cell in distMtx
-	for r := range rows {
+	for r := 0; r < rows; r++ {
 		cellDistance := make([]float64, rows)
 		cellOne := data.RawRowView(r)
 
-		for c := range rows {
+		for c := 0; c < rows; c++ {
 			cellTwo := data.RawRowView(c)
 
 			// calculate EuclideanDistance between two cells and add it to the cell's total cellDistance
@@ -229,29 +314,65 @@ func symmetrizeWeightsUsing(directed *mat.Dense) (map[int][]Edge, float64) {
 // Vania Halim 11/28/2025
 func (g *Graph) Leiden(resolution, gamma, theta float64, maxIter int) []int {
 
-	// initialize clusters with each node in its community
-	clusters := g.InitSingletonPartition()
+	// Work with a copy of the graph to avoid modifying the original
+	workingGraph := g.DeepCopy()
 
-	for i := 0; i < maxIter; i++ {
+	// initialize clusters with each node in its own community
+	clusters := workingGraph.InitSingletonPartition()
+
+	// Keep track of mapping from original nodes to current clusters
+	nodeToCluster := make([]int, g.Nodes)
+	for i := range nodeToCluster {
+		nodeToCluster[i] = i
+	}
+
+	for iter := 0; iter < maxIter; iter++ {
+
 		// create copy of clusters to compare to the new one
 		old := Copy(clusters)
 
 		// move all nodes until clusters reaches local convergence
-		clusters = g.MoveNodes(clusters, resolution)
-		clusters = g.RefinePartition(clusters, resolution, gamma, theta)
+		// todo: generate nodesByCluster once and pass into MoveNodes & RefinePartition
+		clusters = workingGraph.MoveNodes(clusters, resolution, maxIter)
+		if iter == 0 {
+			uniqueClusters := len(workingGraph.NodesByCluster(clusters))
+			fmt.Println("\nAfter MoveNodes, unique clusters:", uniqueClusters)
+			fmt.Println("Resolution parameter:", resolution)
+		}
+
+		clusters = workingGraph.RefinePartition(clusters, resolution, gamma, theta, maxIter)
+
+		if iter == 0 {
+			fmt.Println("After RefinePartition, unique clusters:", len(workingGraph.NodesByCluster(clusters)))
+		}
 
 		// if clusters have converged globally, return clusters
 		if Compare(old, clusters) {
-			return clusters
+			return nodeToCluster
 		}
 
+		// else update mapping
+
+		// "normalize" cluster numbers then udpate mapping of aggregated nodes to clusters
+		clusters = workingGraph.Refine(clusters)
+
+		// the current cluster ID of the original node becomes the index ID of the aggregated node's new cluster
+		for i, ogNodeCluster := range nodeToCluster {
+
+			newCluster := clusters[ogNodeCluster]
+			nodeToCluster[i] = newCluster
+		}
+
+		fmt.Println("printing ognode mapping: (", len(nodeToCluster), ") ", nodeToCluster)
+
 		// else aggregate and repeat
-		clusters = g.Refine(clusters)
-		g = g.Aggregate(clusters)
-		clusters = g.InitSingletonPartition()
+		workingGraph = workingGraph.Aggregate(clusters)
+		// reset to singleton partitions for the next iteration
+		clusters = workingGraph.InitSingletonPartition()
+
 	}
 
-	return clusters
+	return nodeToCluster
 
 }
 
@@ -291,14 +412,22 @@ func (g *Graph) Refine(partition []int) []int {
 // Input: partition []int mapping nodes to cluster IDs after the local move stage, and parameters resolution, gamma, theta as float64.
 // Output: a refined partition as a []int, which may be further subdivided into different clusters
 // Vania Halim - 11/29/2025
-func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float64) []int {
-	n := len(partition)
+func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float64, maxIter int) []int {
 
-	refinedPartition := InitSingletonPartition(n) // initialize
+	// Get clusters from MoveNodes
 	clusters := g.NodesByCluster(partition)
 
+	// Start with a copy of the input partition
+	refinedPartition := Copy(partition)
+
+	// For each cluster (community), refine its internal structure by allowing nodes to move
 	for _, nodes := range clusters {
-		refinedPartition = g.MergeNodesSubset(nodes, partition, refinedPartition, resolution, gamma, theta)
+		if len(nodes) <= 1 {
+			continue // skip singleton clusters
+		}
+
+		// Call MergeNodesSubset on each cluster to refine it
+		refinedPartition = g.MergeNodesSubset(nodes, partition, refinedPartition, resolution, gamma, theta, maxIter, clusters)
 	}
 
 	return refinedPartition
@@ -338,23 +467,28 @@ func (g *Graph) NodesByCluster(partition []int) map[int][]int {
 
 // MergeNodesSubset takes as input a refinedPartition []int where each node is originally a singleton. It modifies refinedPartition in place so that new sub clusters might be formed.
 // Vania Halim - 11/29/2025
-func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resolution, gamma, theta float64) []int {
+func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resolution, gamma, theta float64, maxRounds int, clusters map[int][]int) []int {
 	if len(nodes) <= 1 {
 		return refinedPartition // nothing to refine
 	}
 
 	wellConnectedNodes := g.FindWellConnectedNodes(nodes, partition, gamma) // well connected nodes within a cluster
-	randomNodes := RandomNodeOrder(len(wellConnectedNodes))
 
-	improved := false
+	improved := true
+	round := 0
 
-	for improved {
+	for improved && round < maxRounds {
+
+		improved = false
+
+		// generate a random node order to walk through
+		randomNodes := RandomNodeOrder(len(wellConnectedNodes))
 
 		for _, i := range randomNodes {
 
 			currNode := wellConnectedNodes[i]
 
-			if !Singleton(currNode, partition) {
+			if !Singleton(currNode, refinedPartition) {
 				continue
 			}
 
@@ -366,7 +500,7 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 			}
 
 			// compute likelihood of moving to a candidate cluster
-			probs := g.ComputeMoveProbability(currNode, wellConnectedClusters, refinedPartition, theta, resolution)
+			probs := g.ComputeMoveProbability(currNode, wellConnectedClusters, refinedPartition, theta, resolution, clusters)
 
 			// move to one of the candidate clusters based on probabilities computed
 			newCluster := g.SampleCommunity(wellConnectedClusters, probs)
@@ -375,6 +509,8 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 			improved = true
 
 		}
+
+		round++
 	}
 
 	return refinedPartition
@@ -384,8 +520,12 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 // Amy Ji - 11/30/2025, Vania Halim - 11/30/2025
 func (g *Graph) FindWellConnectedClusters(nodes, refinedPartition []int, gamma float64) []int {
 
-	// a map of cluster id: []node
-	clusterMembers := g.NodesByCluster(nodes)
+	// Group nodes in the subset by their cluster IDs in refinedPartition
+	clusterMembers := make(map[int][]int)
+	for _, node := range nodes {
+		clusterID := refinedPartition[node]
+		clusterMembers[clusterID] = append(clusterMembers[clusterID], node)
+	}
 
 	//candidates will be a slice of community ID that passes the test
 	candidates := make([]int, 0)
@@ -467,7 +607,7 @@ func (g *Graph) SampleCommunity(clusters []int, probs map[int]float64) int {
 
 // ComputeMoveProbability computes and maps the clusterID of the new cluster C' to the probability of moving node v into cluster C' for all clusters in the subset S of candidate clusters according to the randomness parameter theta
 // Vania Halim - 11/30/2025
-func (g *Graph) ComputeMoveProbability(currNode int, candidateClusters, refinedPartition []int, theta, resolution float64) map[int]float64 {
+func (g *Graph) ComputeMoveProbability(currNode int, candidateClusters, refinedPartition []int, theta, resolution float64, nodesByCluster map[int][]int) map[int]float64 {
 
 	probs := make(map[int]float64) // maps clusterID to the probability of moving into that cluster
 	var sum float64                // for normalization
@@ -475,7 +615,7 @@ func (g *Graph) ComputeMoveProbability(currNode int, candidateClusters, refinedP
 	// compute probability of moving into each cluster in candidateClusters (unnormalized)
 	for _, c := range candidateClusters {
 
-		dQ := g.ModularityGain(currNode, c, refinedPartition, resolution)
+		dQ := g.ModularityGain(currNode, c, refinedPartition, resolution, nodesByCluster)
 
 		if dQ < 0 {
 			probs[c] = 0.0
@@ -598,11 +738,12 @@ func Singleton(node int, refinedPartition []int) bool {
 // Input: a partition as a slice of integers denoting the cluster for each node and a resolution parameter as a decimal
 // Output: a partition as a slice of ints where indices are node IDs and the value is the cluster ID
 // Vania Halim - 11/29/2025
-func (g *Graph) MoveNodes(partition []int, resolution float64) []int {
+func (g *Graph) MoveNodes(partition []int, resolution float64, maxRounds int) []int {
 
 	improved := true
+	round := 0
 
-	for improved {
+	for improved && round < maxRounds {
 
 		improved = false
 
@@ -623,6 +764,8 @@ func (g *Graph) MoveNodes(partition []int, resolution float64) []int {
 
 		}
 
+		round++
+
 	}
 
 	return partition
@@ -640,11 +783,14 @@ func FindBestCluster(node int, g *Graph, candidateClusters, partition []int, res
 	currCluster := partition[node]
 	bestCluster := currCluster
 
+	// generate mapping of cluster IDs to []int node ID for that cluster
+	nodesByCluster := g.NodesByCluster(partition)
+
 	// range through each cluster in candidateClusters
 	for _, cluster := range candidateClusters {
 
 		// find deltaQ of moving node i to each cluster in candidateClusters
-		gain := g.ModularityGain(node, cluster, partition, resolution)
+		gain := g.ModularityGain(node, cluster, partition, resolution, nodesByCluster)
 
 		// update maxGain and bestCluster if needed
 		if gain > maxGain {
@@ -671,6 +817,7 @@ func RandomNodeOrder(n int) []int {
 		nodes[i] = i
 	}
 
+	// randomize nodes order
 	for i := n - 1; i > 0; i-- {
 		j := rand.Intn(i + 1)
 		nodes[i], nodes[j] = nodes[j], nodes[i]
@@ -707,45 +854,53 @@ func FindCandidateClusters(node int, edges []Edge, partition []int) []int {
 
 }
 
-// ModularityGain computes the change in modularity by moving node i into the given cluster for a given resolution.
+// ModularityGain computes the change in modularity by moving node i from its current cluster into the given target cluster
 // Vania Halim 11/28/2025
-func (g *Graph) ModularityGain(i, cluster int, partition []int, resolution float64) float64 {
-	var observed float64
-	var ki float64
-	var kj float64
+func (g *Graph) ModularityGain(i, targetCluster int, partition []int, resolution float64, nodesByCluster map[int][]int) float64 {
 
-	// compute observed: sum of edge weights between node i and nodes in the cluster
-	for _, e := range g.Edges[i] { // ranges through all edges in node i
-		if partition[e.To] == cluster { // if node i has an edge to a node in cluster
-			observed += e.Weight // add weight of that edge to sum of observed edge weights
+	// If already in target cluster, no gain
+	currentCluster := partition[i]
+	if currentCluster == targetCluster {
+		return 0.0
+	}
+
+	// else compute k_i, degree of node i
+	ki := g.NodeDegree(i)
+
+	// compute k_{i,in}, sum of edge weights between node i and all nodes in the currentCluster (edgesToTarget)
+	var edgesToTarget float64
+	for _, edge := range g.Edges[i] { // for each neighbor of node i
+
+		// if neighbor is in the targetCluster
+		if partition[edge.To] == targetCluster {
+			edgesToTarget += edge.Weight
 		}
 	}
 
-	// compute kj (cluster degree): sum of edge weights for all nodes in the cluster
-	for node, community := range partition {
-
-		// if the node is not in the community cluster then skip it
-		if community != cluster {
-			continue
+	// compute edges from node i to current cluster (excluding self-loops)
+	var edgesToCurrent float64
+	for _, edge := range g.Edges[i] {
+		if partition[edge.To] == currentCluster && edge.To != i {
+			edgesToCurrent += edge.Weight
 		}
-
-		// else explore the edge weights of that node
-		for _, e := range g.Edges[node] {
-			kj += e.Weight
-		}
-
 	}
 
-	// compute ki (node i degree) : sum of edge weights incident to node i
-	for _, e := range g.Edges[i] {
-		ki += e.Weight
-	}
+	// compute cluster degrees
+	targetDegree := g.ClusterDegree(nodesByCluster[targetCluster])
+	currentDegree := g.ClusterDegree(nodesByCluster[currentCluster])
 
-	// compute deltaQ
-	expected := (ki * kj) / g.TotalWeight
-	deltaQ := observed - (resolution * expected)
+	// modularity gain formula for undirected graphs
+	m := g.TotalWeight
+	m2 := 2.0 * m
 
-	return deltaQ
+	// gain from moving to target
+	gainTarget := edgesToTarget/m - resolution*(targetDegree*ki)/(m2*m2)
+
+	// loss from leaving current (need to subtract ki from currentDegree since we're removing node i)
+	gainCurrent := edgesToCurrent/m - resolution*((currentDegree-ki)*ki)/(m2*m2)
+
+	return gainTarget - gainCurrent
+
 }
 
 func (g *Graph) NodeDegree(nodeID int) float64 {
@@ -817,6 +972,46 @@ func Copy(partition []int) []int {
 	newPartition := make([]int, len(partition))
 	copy(newPartition, partition)
 	return newPartition
+}
+
+// DeepCopy creates a deep copy of the graph and returns that deep copy as a *Graph
+// Vania Halim - 12/4/2025
+func (g *Graph) DeepCopy() *Graph {
+
+	// safety
+	if g == nil {
+		return nil
+	}
+
+	// initialize the new slice of edges
+	newEdges := make(map[int][]Edge, len(g.Edges))
+
+	// range through edges and copy information to newEdges
+	for node, edges := range g.Edges {
+		newEdgeList := make([]Edge, len(edges)) // init newEdges list
+
+		// range through each edge in edges
+		for id, edge := range edges {
+			// copy edge fields into newEdge
+			newEdge := Edge{
+				To:     edge.To,
+				Weight: edge.Weight,
+			}
+
+			// assign newEdge to newEdgeList
+			newEdgeList[id] = newEdge
+		}
+
+		// assign the copied slice into the new map
+		newEdges[node] = newEdgeList
+	}
+
+	// return the new Graph
+	return &Graph{
+		Nodes:       g.Nodes,
+		Edges:       newEdges,
+		TotalWeight: g.TotalWeight,
+	}
 }
 
 // Compare checks if two partitions (basically two slices of integers) are equal.
