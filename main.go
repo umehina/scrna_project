@@ -4,18 +4,32 @@ package main
 import (
 	"fmt"
 	"log"
+
+	"gonum.org/v1/gonum/mat"
 )
 
 // seperate the original main function into subfunctions.
 func main() {
-	// 1. Load + QC filter dataset
+	// Load + QC filter dataset
 	_, filtered := loadAndFilterDataset("data/scRNA_dataset.csv")
 
-	// 2. Build, normalize, scale expression matrix
+	// Build, normalize, scale expression matrix
 	em := buildAndPreprocessMatrix(filtered)
 
-	// 3. Run PCA and save PCA plot
-	runPCAAndPlot(em, "pca.png", 0, 1)
+	// Run PCA and save PCA plot
+	pcResult := runPCAAndPlot(em, "pca.png", 0, 1)
+	
+
+	// Run Leiden clustering and export csv.
+	k := 20 // Match Seurat's k.param
+	maxIter := 10
+	resolution := 1.0 // standard resolution
+	gamma := 1.0
+	theta := 0.01
+
+	runLeidenandExport(pcResult.scores, k, maxIter, resolution, gamma, theta)
+
+
 
 	// 4. Run UMAP on Leiden PCs and save embedding
 	coordpath := "output/leiden_export_coords.csv"
@@ -68,7 +82,6 @@ func buildAndPreprocessMatrix(filtered *CountMatrix) *ExpressionMatrix {
 	return &em
 }
 
-
 func runPCAAndPlot(em *ExpressionMatrix, outPath string, pcX, pcY int) *PCAResult {
 	fmt.Print("Running PCA...")
 	pcs := em.PCA(30)
@@ -83,6 +96,11 @@ func runPCAAndPlot(em *ExpressionMatrix, outPath string, pcX, pcY int) *PCAResul
 	fmt.Printf("PCA plot saved as %s\n", outPath)
 
 	return pcs
+}
+
+func runLeidenandExport(pcaCoords *mat.Dense, k, maxIter int, resolution, gamma, theta float64){
+	g,clusteredNodes := RunLeiden(pcaCoords, k,maxIter,resolution,gamma,theta)
+	ExportLeiden(g, clusteredNodes,pcaCoords,k,maxIter,resolution,gamma,theta)
 }
 
 func runUMAPPipeline(coordPath, outPath string) error {

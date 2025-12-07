@@ -55,12 +55,12 @@ func RunLeiden(data *mat.Dense, k, maxIter int, resolution, gamma, theta float64
 
 }
 
-// ExportLeiden exports the KNN graph, cluster labels, and PCA coordinates for R visualization
+// ExportLeiden exports the KNN graph, cluster labels, PCA coordinates, and parameters for R visualization
 // Vania Halim - 12/4/2025
-func ExportLeiden(g *Graph, clusters []int, pcaCoords *mat.Dense) {
+func ExportLeiden(g *Graph, clusters []int, pcaCoords *mat.Dense, k, maxIter int, resolution, gamma, theta float64) {
 
 	// ensure R directory exists and save files there for R plotting
-	dir := "R"
+	dir := "output"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}
@@ -127,6 +127,23 @@ func ExportLeiden(g *Graph, clusters []int, pcaCoords *mat.Dense) {
 		_ = w2.Write([]string{strconv.Itoa(i + 1), strconv.Itoa(c + 1)})
 	}
 
+	// Export parameters
+	paramsFile := filepath.Join(dir, "leiden_export_params.csv")
+	f4, err := os.Create(paramsFile)
+	if err != nil {
+		return
+	}
+	defer f4.Close()
+	w4 := csv.NewWriter(f4)
+	defer w4.Flush()
+
+	_ = w4.Write([]string{"parameter", "value"})
+	_ = w4.Write([]string{"k", strconv.Itoa(k)})
+	_ = w4.Write([]string{"maxIter", strconv.Itoa(maxIter)})
+	_ = w4.Write([]string{"resolution", strconv.FormatFloat(resolution, 'g', -1, 64)})
+	_ = w4.Write([]string{"gamma", strconv.FormatFloat(gamma, 'g', -1, 64)})
+	_ = w4.Write([]string{"theta", strconv.FormatFloat(theta, 'g', -1, 64)})
+
 }
 
 // ==================== Building a Distance Matrix ====================
@@ -157,7 +174,7 @@ func DistanceMatrix(data *mat.Dense) *mat.Dense {
 	return distMtx
 }
 
-// Euclidean takes as input two slices of floats, corresponding to the principal components of two different cells. It returns the Euclidean distance of the principal components between two cells. It is called within DistanceMatrix() to calculate the Euclidean distance between all cells.
+// Euclidean takes as input two slices of floats, corresponding to the reduced and normalized counts of each cell. It returns the Euclidean distance of the expression between two cells. It is called within DistanceMatrix() to calculate the Euclidean distance between all cells.
 // // Vania Halim 11/27/2025
 func Euclidean(firstCell, secondCell []float64) float64 {
 	euclidean := 0.0
@@ -346,7 +363,7 @@ func (g *Graph) Leiden(resolution, gamma, theta float64, maxIter int) []int {
 			fmt.Println("After RefinePartition, unique clusters:", len(workingGraph.NodesByCluster(clusters)))
 		}
 
-		// if clusters have converged globally, return clusters
+		// if clusters have converged globally, return mapping to original nodes
 		if Compare(old, clusters) {
 			return nodeToCluster
 		}
@@ -362,8 +379,6 @@ func (g *Graph) Leiden(resolution, gamma, theta float64, maxIter int) []int {
 			newCluster := clusters[ogNodeCluster]
 			nodeToCluster[i] = newCluster
 		}
-
-		fmt.Println("printing ognode mapping: (", len(nodeToCluster), ") ", nodeToCluster)
 
 		// else aggregate and repeat
 		workingGraph = workingGraph.Aggregate(clusters)
@@ -414,20 +429,13 @@ func (g *Graph) Refine(partition []int) []int {
 // Vania Halim - 11/29/2025
 func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float64, maxIter int) []int {
 
-	// Get clusters from MoveNodes
+	// get clusters from MoveNodes and create refinedPartition as a copy of partition
 	clusters := g.NodesByCluster(partition)
-
-	// Start with a copy of the input partition
 	refinedPartition := Copy(partition)
 
-	// For each cluster (community), refine its internal structure by allowing nodes to move
-	for _, nodes := range clusters {
-		if len(nodes) <= 1 {
-			continue // skip singleton clusters
-		}
-
-		// Call MergeNodesSubset on each cluster to refine it
-		refinedPartition = g.MergeNodesSubset(nodes, partition, refinedPartition, resolution, gamma, theta, maxIter, clusters)
+	// For each given cluster ID, take the subset of nodes, and further refine the partition
+	for _, cluster := range clusters {
+		refinedPartition = g.MergeNodesSubset(cluster, partition, refinedPartition, resolution, gamma, theta, maxIter, clusters)
 	}
 
 	return refinedPartition
@@ -520,12 +528,8 @@ func (g *Graph) MergeNodesSubset(nodes, partition, refinedPartition []int, resol
 // Amy Ji - 11/30/2025, Vania Halim - 11/30/2025
 func (g *Graph) FindWellConnectedClusters(nodes, refinedPartition []int, gamma float64) []int {
 
-	// Group nodes in the subset by their cluster IDs in refinedPartition
-	clusterMembers := make(map[int][]int)
-	for _, node := range nodes {
-		clusterID := refinedPartition[node]
-		clusterMembers[clusterID] = append(clusterMembers[clusterID], node)
-	}
+	// a map of cluster id: []node
+	clusterMembers := g.NodesByCluster(refinedPartition)
 
 	//candidates will be a slice of community ID that passes the test
 	candidates := make([]int, 0)
@@ -856,10 +860,10 @@ func FindCandidateClusters(node int, edges []Edge, partition []int) []int {
 
 // ModularityGain computes the change in modularity by moving node i from its current cluster into the given target cluster
 // Vania Halim 11/28/2025
-func (g *Graph) ModularityGain(i, targetCluster int, partition []int, resolution float64, nodesByCluster map[int][]int) float64 {
+func (g *Graph) ModularityGain(i, targetCluster int, clusters []int, resolution float64, nodesByCluster map[int][]int) float64 {
 
 	// If already in target cluster, no gain
-	currentCluster := partition[i]
+	currentCluster := clusters[i]
 	if currentCluster == targetCluster {
 		return 0.0
 	}
@@ -868,38 +872,37 @@ func (g *Graph) ModularityGain(i, targetCluster int, partition []int, resolution
 	ki := g.NodeDegree(i)
 
 	// compute k_{i,in}, sum of edge weights between node i and all nodes in the currentCluster (edgesToTarget)
+	//edgesToTarget := g.EdgesToCluster(i, clusters)
+
 	var edgesToTarget float64
-	for _, edge := range g.Edges[i] { // for each neighbor of node i
-
-		// if neighbor is in the targetCluster
-		if partition[edge.To] == targetCluster {
-			edgesToTarget += edge.Weight
+	for _, neighbor := range g.Edges[i] { // for each neighbor of node i
+		// if cluster of neighboring node is in the targetCluster
+		if clusters[neighbor.To] == targetCluster {
+			edgesToTarget += neighbor.Weight
 		}
 	}
 
-	// compute edges from node i to current cluster (excluding self-loops)
+	// compute k_{i, in D (current)}, sum of edge weights between node i and the nodes in the current cluster D
 	var edgesToCurrent float64
-	for _, edge := range g.Edges[i] {
-		if partition[edge.To] == currentCluster && edge.To != i {
-			edgesToCurrent += edge.Weight
+	for _, neighbor := range g.Edges[i] {
+		// if neighbor is in the currentCluster AND is not a self loop
+		if clusters[neighbor.To] == currentCluster && neighbor.To != i {
+			edgesToCurrent += neighbor.Weight
 		}
 	}
 
-	// compute cluster degrees
-	targetDegree := g.ClusterDegree(nodesByCluster[targetCluster])
-	currentDegree := g.ClusterDegree(nodesByCluster[currentCluster])
+	// compute total weights for the current and target cluster
+	nodesInTarget, nodesInCurrent := nodesByCluster[targetCluster], nodesByCluster[currentCluster]
+	targetDegree, currentDegree := g.ClusterDegree(nodesInTarget), g.ClusterDegree(nodesInCurrent)
 
-	// modularity gain formula for undirected graphs
+	// compute delta Q in and out:
 	m := g.TotalWeight
-	m2 := 2.0 * m
+	m2 := m * m
 
-	// gain from moving to target
-	gainTarget := edgesToTarget/m - resolution*(targetDegree*ki)/(m2*m2)
+	dQ_in := (edgesToTarget / (2 * m)) - (resolution * (2 * targetDegree * ki) / (4 * m2))
+	dQ_out := (edgesToCurrent / (2 * m)) - (resolution * (2 * (currentDegree - ki) * ki) / (4 * m2))
 
-	// loss from leaving current (need to subtract ki from currentDegree since we're removing node i)
-	gainCurrent := edgesToCurrent/m - resolution*((currentDegree-ki)*ki)/(m2*m2)
-
-	return gainTarget - gainCurrent
+	return dQ_in - dQ_out
 
 }
 
