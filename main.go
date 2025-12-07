@@ -26,7 +26,8 @@ func main() {
 	// placeholder values
 	pearsonTheta := 100.0
 	normalizeMethod := "pearson"
-	pcPlot := 30
+	pcPlot := 30    // For visualization only
+	pcCluster := 30 // For clustering (match Seurat)
 
 	//Amy Ji - 11/1/2025
 	// load dataset, returns CountMatrix struct
@@ -49,7 +50,7 @@ func main() {
 
 	fmt.Print("Normalizing...")
 	if normalizeMethod == "pearson" {
-		em = em.Pearson(pearsonTheta)
+		em = em.Pearson(filtered, pearsonTheta)
 	} else if normalizeMethod == "log1p" {
 		em.Log1p()
 	}
@@ -57,103 +58,60 @@ func main() {
 	fmt.Println("Done Normalizing. Scaling Normalized Data...")
 	em.ScaleData(10)
 
-	// run PCA and plot results
+	// run PCA for plotting (2 components)
 	fmt.Println("Done Scaling.. Running PCA")
-	pcs := em.PCA(pcPlot)
-	fmt.Println("Done PCA. PC Variances:", pcs.variances)
+	pcsPlot := em.PCA(pcPlot)
+	fmt.Println("Done PCA. PC Variances (first 2):", pcsPlot.variances)
 
 	fmt.Println("Plotting PCA...")
-	err = pcs.PlotPCAScatter("pca.png", 0, 1)
+	err = pcsPlot.PlotPCAScatter("pca.png", 0, 1)
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println("PCA plot saved as pca.png")
 
 	// --- Leiden clustering test and visualization ---
-	// Use the PCA scores as input to build KNN and run Leiden (works on a copy internally)
-	// Defaults: k=10, maxIter=10, resolution=0.8, gamma=0.5, theta=0.01
+	// Compute PCA with more components for clustering (match Seurat)
 	fmt.Println("Running Leiden clustering test and exporting to R...")
-	// get the PCA scores (2D embeddings) to use as coordinates for visualization
-	pcaScores := pcs.GetScores()
+	fmt.Printf("Computing %d PCs for clustering...\n", pcCluster)
+	pcsCluster := em.PCA(pcCluster)
+	pcaScores := pcsCluster.GetScores()
 
-	// also get the full scaled data for distance calculations
-	dataDense := em.ToDense()
-	if dataDense == nil {
-		log.Printf("data dense is nil")
-	} else {
-		k := 5
-		maxIter := 10
-		resolution := 1.0 // standard resolution
-		gamma := 1.0
-		theta := 0.01
+	k := 20 // Match Seurat's k.param
+	maxIter := 10
+	resolution := 1.0 // standard resolution
+	gamma := 1.0
+	theta := 0.01
 
-		fmt.Println("Running Leiden on full data...")
-		g, clusters := RunLeiden(dataDense, k, maxIter, resolution, gamma, theta)
+	fmt.Println("Running Leiden on PCA scores...")
+	g, clusters := RunLeiden(pcaScores, k, maxIter, resolution, gamma, theta)
 
-		// Count unique clusters
-		uniqueClusters := make(map[int]bool)
-		for _, c := range clusters {
-			uniqueClusters[c] = true
-		}
-		fmt.Printf("Leiden produced %d clusters from %d nodes\n", len(uniqueClusters), len(clusters))
-
-		fmt.Println("Done with Leiden. Exporting graphs and PCA coordinates...")
-		// export graph edges, cluster labels, and PCA coordinates into R/ for plotting
-		ExportLeiden(g, clusters, pcaScores)
-
-		fmt.Println("Done exporting. Running R Script...")
-		// run the verification script to compare with Seurat
-		cmd := exec.Command("Rscript", "R/verify_clustering.R")
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Printf("Rscript failed: %v\nOutput:\n%s", err, string(out))
-		} else {
-			fmt.Println("Clustering comparison generated successfully")
-		}
+	// Count unique clusters
+	uniqueClusters := make(map[int]bool)
+	for _, c := range clusters {
+		uniqueClusters[c] = true
 	}
+	fmt.Printf("Leiden produced %d clusters from %d nodes\n", len(uniqueClusters), len(clusters))
 
-	/*
-		//perform normalization
-		sff := 10000.00
-		// LogNormalize modifies 'filtered' in place and does not return a value, so call it directly.
-		filtered.LogNormalize(sff)
-		//filtered.Summary()
-	*/
+	fmt.Println("Done with Leiden. Exporting graphs and PCA coordinates...")
+	// export graph edges, cluster labels, PCA coordinates, and parameters into R/ for plotting
+	ExportLeiden(g, clusters, pcaScores, k, maxIter, resolution, gamma, theta)
 
-	/*
-		// transform countMatrix to a *mat.Dense object
-		MMatrix := CmToDense(filtered)
-
-		// =================== TSNE ============================
-		// Amy Ji - 11/13/2025
-		// Define perplexity and iterations for RunTSNE
-		perplexity := 30.0
-		iterations := 1000
-		tsne := RunTSNE(MMatrix, perplexity, iterations)
-
-		// Print cell numbers and dimension
-		fmt.Println(tsne.RawMatrix().Rows, tsne.RawMatrix().Cols)
-		// plot mat.Dense after tSNE
-		err1 := PlotTSNE(tsne, "tsne.png")
-
-		if err1 != nil {
-			panic(err1)
-		}
-
-		// =================== PCA ========================
-		proj := RunPCA(MMatrix, 2)
-		_ = proj // just so we can graph/plot it later on.
-		PlotPCA2D(proj, "pca.png")
-
-		// ================ PEARSON NORMALIZATION ==================
-		em, numCells, numGenes := BuildMatrix(filtered)
-
-		theta := 0.5
-		normalized := em.Pearson(theta)
-
-		// print first 5
-		normalized.PearsonSummarize(10)
-
-	*/
-
+	fmt.Println("Done exporting. Running verification script...")
+	// run the verification script to compare with Seurat
+	cmd := exec.Command("Rscript", "R/verify_clustering.R")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Verification script failed: %v\nOutput:\n%s", err, string(out))
+	} else {
+		fmt.Println("Clustering comparison plot created successfully")
+	}
 }
+
+/*
+	//perform normalization
+	sff := 10000.00
+	// LogNormalize modifies 'filtered' in place and does not return a value, so call it directly.
+	filtered.LogNormalize(sff)
+	//filtered.Summary()
+*/

@@ -21,6 +21,11 @@ type PCAResult struct {
 	barcodes  []string
 }
 
+// GetScores returns the PCA scores matrix (cell x PC)
+func (p *PCAResult) GetScores() *mat.Dense {
+	return p.scores
+}
+
 // ToDense converts the ExpressionMatrix into a row-major *mat.Dense so it can be used by gonum’s PCA routines.
 func (em *ExpressionMatrix) ToDense() *mat.Dense {
 	n := len(em.data) // number of cells
