@@ -44,6 +44,49 @@ func main() {
 	}
 	fmt.Println("PCA plot saved as pca.png")
 
+	// ================ Run UMAP =====================
+	// 1. Load PCs from Leiden coords CSV
+	data, nodeIDs, err := loadLeidenCoords("leiden_export_coords.csv")
+	if err != nil {
+		log.Fatalf("failed to load coords: %v", err)
+	}
+	fmt.Printf("Loaded %d cells with %d PCs\n", len(data), len(data[0]))
+	fmt.Printf("NodeID range: %d..%d\n", nodeIDs[0], nodeIDs[len(nodeIDs)-1])
+
+	// 2. UMAP hyperparameters (tune here)
+	nNeighbors := 30
+	nComponents := 2
+	nEpochs := 1000
+	learningRate := 0.2
+	negativeSamples := 5
+	minDist := 0.1
+	// if fuzzy edges mean is not within range 0.2-0.6, the parameter is not good. 
+
+	// 3. Run UMAP
+	embedding := UMAP(
+		data,
+		nNeighbors,
+		nComponents,
+		nEpochs,
+		learningRate,
+		negativeSamples,
+		minDist,
+	)
+
+	// 4. Quick sanity check
+	if len(embedding) != len(data) {
+		log.Fatalf("embedding length mismatch: got %d, want %d", len(embedding), len(data))
+	}
+	fmt.Printf("UMAP embedding shape: %d x %d\n", len(embedding), len(embedding[0]))
+
+	if err := writeEmbeddingCSV("umap_out.csv", nodeIDs, embedding); err != nil {
+		log.Fatalf("failed to write UMAP csv: %v", err)
+	}
+
+	fmt.Println("UMAP embedding written to umap_out.csv")
+
+
+	/*
 	// ================= Run TSNE ====================
 	fmt.Println("Running t-SNE")
 	tsneResult := pcs.TSNE(2,30,200,1000) // to cluster after tSNE, call variable name tsneResult
@@ -79,5 +122,5 @@ func main() {
 	u_xlabel:="umap_1"
 	u_ylabel:="umap_2"
 	PlotEmb(umapResult,"umap.png", u_title,u_xlabel,u_ylabel)
-
+	*/
 }
