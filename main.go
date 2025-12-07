@@ -1,68 +1,110 @@
+//Amy Ji - 11/1/2025
 package main
 
 import (
 	"fmt"
 	"log"
-	
 )
-//Amy Ji - 11/1/2025
+
+// seperate the original main function into subfunctions.
 func main() {
-	// load dataset, returns CountMatrix struct
-	dataset, err := ParseCountMatrixFromFile("data/scRNA_dataset.csv")
-	if err != nil {
-		log.Fatalf("Error: %v", err)
+	// 1. Load + QC filter dataset
+	_, filtered := loadAndFilterDataset("data/scRNA_dataset.csv")
+
+	// 2. Build, normalize, scale expression matrix
+	em := buildAndPreprocessMatrix(filtered)
+
+	// 3. Run PCA and save PCA plot
+	runPCAAndPlot(em, "pca.png", 0, 1)
+
+	// 4. Run UMAP on Leiden PCs and save embedding
+	coordpath := "output/leiden_export_coords.csv"
+	outpath:= "output/umap.csv"
+	if err := runUMAPPipeline(coordpath, outpath); err != nil {
+		log.Fatalf("UMAP pipeline failed: %v", err)
 	}
-	dataset.ImportSummary()
 
-	// perform QC filtering
+	fmt.Println("UMAP Pipeline finished successfully.")
+}
 
-	filtered := dataset.FilterBy(200, 2500, 500, 5000, 0.05)
-	filtered.ImportSummary()
 
-	fmt.Print("Building em...")
+func loadAndFilterDataset(path string) (dataset, filtered *CountMatrix) {
+	fmt.Println("Loading dataset:", path)
+
+	d, err := ParseCountMatrixFromFile(path)
+	if err != nil {
+		log.Fatalf("Error loading dataset: %v", err)
+	}
+	d.ImportSummary()
+
+	// QC thresholds (parameterize these or move them to a config later)
+	minFeatures, maxFeatures := 200, 2500
+	minCounts, maxCounts := 500, 5000
+	maxPercentMT := 0.05
+
+	fmt.Println("Applying QC filters...")
+	f := d.FilterBy(minFeatures, maxFeatures, minCounts, maxCounts, maxPercentMT)
+	f.ImportSummary()
+
+	return d, f
+}
+
+
+func buildAndPreprocessMatrix(filtered *CountMatrix) *ExpressionMatrix {
+	fmt.Print("Building expression matrix...")
 	em, _, _ := BuildMatrix(filtered)
 	fmt.Println(" done.")
 
-	fmt.Print("Normalizing...")
-	em.Pearson(filtered,100)
+	// Normalization
+	fmt.Print("Normalizing (Pearson)...")
+	em.Pearson(filtered, 100)
 	fmt.Println(" done.")
 
-	fmt.Print("Scaling...")
+	// Scaling
+	fmt.Print("Scaling data...")
 	em.ScaleData(10)
 	fmt.Println(" done.")
 
-	// ================ Run PCA ====================
+	return &em
+}
+
+
+func runPCAAndPlot(em *ExpressionMatrix, outPath string, pcX, pcY int) *PCAResult {
 	fmt.Print("Running PCA...")
 	pcs := em.PCA(30)
 	fmt.Println(" done.")
+
 	fmt.Println("PC variances:", pcs.variances)
 
-	fmt.Println("Plotting PCA...")
-	err = pcs.PlotPCAScatter("pca.png", 0, 1)
-	if err != nil {
-		panic(err)
+	fmt.Println("Plotting PCA scatter...")
+	if err := pcs.PlotPCAScatter(outPath, pcX, pcY); err != nil {
+		log.Fatalf("failed to plot PCA scatter: %v", err)
 	}
-	fmt.Println("PCA plot saved as pca.png")
+	fmt.Printf("PCA plot saved as %s\n", outPath)
 
-	// ================ Run UMAP =====================
+	return pcs
+}
+
+func runUMAPPipeline(coordPath, outPath string) error {
 	// 1. Load PCs from Leiden coords CSV
-	data, nodeIDs, err := loadLeidenCoords("leiden_export_coords.csv")
+	fmt.Println("Loading Leiden coordinates from:", coordPath)
+	data, nodeIDs, err := loadLeidenCoords(coordPath)
 	if err != nil {
-		log.Fatalf("failed to load coords: %v", err)
+		return fmt.Errorf("failed to load coords: %w", err)
 	}
 	fmt.Printf("Loaded %d cells with %d PCs\n", len(data), len(data[0]))
 	fmt.Printf("NodeID range: %d..%d\n", nodeIDs[0], nodeIDs[len(nodeIDs)-1])
 
-	// 2. UMAP hyperparameters (tune here)
+	// 2. UMAP hyperparameters (tune here for now)
 	nNeighbors := 30
 	nComponents := 2
 	nEpochs := 1000
-	learningRate := 0.2
-	negativeSamples := 5
+	learningRate := 0.1
+	negativeSamples := 10
 	minDist := 0.1
-	// if fuzzy edges mean is not within range 0.2-0.6, the parameter is not good. 
+	// Note: if fuzzy edges mean is not within 0.2–0.6, parameters may not be ideal.
 
-	// 3. Run UMAP
+	fmt.Println("Running UMAP...")
 	embedding := UMAP(
 		data,
 		nNeighbors,
@@ -73,54 +115,17 @@ func main() {
 		minDist,
 	)
 
-	// 4. Quick sanity check
+	// Quick sanity check
 	if len(embedding) != len(data) {
-		log.Fatalf("embedding length mismatch: got %d, want %d", len(embedding), len(data))
+		return fmt.Errorf("embedding length mismatch: got %d, want %d", len(embedding), len(data))
 	}
 	fmt.Printf("UMAP embedding shape: %d x %d\n", len(embedding), len(embedding[0]))
 
-	if err := writeEmbeddingCSV("umap_out.csv", nodeIDs, embedding); err != nil {
-		log.Fatalf("failed to write UMAP csv: %v", err)
+	// Write embedding to CSV
+	if err := writeEmbeddingCSV(outPath, nodeIDs, embedding); err != nil {
+		return fmt.Errorf("failed to write UMAP csv: %w", err)
 	}
+	fmt.Printf("UMAP embedding written to %s\n", outPath)
 
-	fmt.Println("UMAP embedding written to umap_out.csv")
-
-
-	/*
-	// ================= Run TSNE ====================
-	fmt.Println("Running t-SNE")
-	tsneResult := pcs.TSNE(2,30,200,1000) // to cluster after tSNE, call variable name tsneResult
-	if err != nil {
-		log.Fatal(err)
-	}
-	t_title:="tsne"
-	t_xlabel:="tsne_1"
-	t_ylabel:="tsne_2"
-	PlotEmb(tsneResult.scores,"tsne.png",t_title,t_xlabel,t_ylabel )
-	fmt.Println("TSNE plot saved as tsne.png")
-	
-	// ================== Run UMAP ====================
-	fmt.Println("converting scores to csv file")
-	SavePCAScoresForR(pcs,"pca_scores.csv")
-
-	fmt.Println("Running UMAP in R")
-	// set UMAP parameters here!
-	if err := RunRUMAP("umap_script.R", "pca_scores.csv", "umap_out.csv", 30, 0.3, "euclidean"); err != nil {
-    	log.Fatal(err)
-	}
-
-	// Read UMAP embedding back into Go
-	// umapCells are the last column, checkout umap_out.csv file.
-	// It is omitted here, but we may need the cell barcode info in the future.
-	umapResult,_, err := LoadUMAPFromCSV("umap_out.csv") // to cluster after umap, call variable name umapResult
-	if err != nil {
-    	log.Fatal(err)
-	}
-
-	fmt.Println("Plotting UMAP")
-	u_title:="umap"
-	u_xlabel:="umap_1"
-	u_ylabel:="umap_2"
-	PlotEmb(umapResult,"umap.png", u_title,u_xlabel,u_ylabel)
-	*/
+	return nil
 }

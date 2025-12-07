@@ -12,7 +12,7 @@ import (
 // node,PC1,PC2,...,PC30
 // and returns:
 //   data[i]   = []float64{PC1..PC30} for row i
-//   nodeIDs[i] = original node ID (1-based in your CSV)
+//   nodeIDs[i] = original node ID (1-based in CSV)
 func loadLeidenCoords(path string) (data [][]float64, nodeIDs []int, err error) {
 	f, err := os.Open(path)
 	if err != nil {
