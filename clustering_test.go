@@ -1,3 +1,7 @@
+//Name: Yinan Zhu 
+//Date added: 12/06/2025 and 12/07/2025
+// Disclaimer: we consulted ChatGPT for many parser functions in this file.
+
 // distance_matrix_test.go
 package main
 
