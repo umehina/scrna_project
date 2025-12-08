@@ -1,0 +1,19 @@
+# Case 1: empty graph, empty partition
+{"nodes":0,"edges":{},"totalWeight":0,"partition":[],"resolution":1.0,"gamma":1.0,"theta":0.01}
+@ no nodes and empty partition → result should stay empty
+{"clusters":[]}
+
+# Case 2: single node, singleton partition
+{"nodes":1,"edges":{"0":[]},"totalWeight":0,"partition":[0],"resolution":1.0,"gamma":1.0,"theta":0.01}
+@ one node in its own cluster; refinement should keep it as [0]
+{"clusters":[0]}
+
+# Case 3: three nodes, already singleton communities
+{"nodes":3,"edges":{"0":[{"to":1,"weight":1}],"1":[{"to":0,"weight":1},{"to":2,"weight":1}],"2":[{"to":1,"weight":1}]},"totalWeight":3.0,"partition":[0,1,2],"resolution":1.0,"gamma":1.0,"theta":0.01}
+@ each node initially in a different cluster; refinement should keep them separated
+{"clusters":[0,1,2]}
+
+# Case 4: three nodes, two in one community and one separate
+{"nodes":3,"edges":{"0":[{"to":1,"weight":1}],"1":[{"to":0,"weight":1},{"to":2,"weight":0.1}],"2":[{"to":1,"weight":0.1}]},"totalWeight":2.1,"partition":[0,0,1],"resolution":1.0,"gamma":1.0,"theta":0.01}
+@ cluster {0,1} together and {2} separate; refinement is expected to preserve this structure
+{"clusters":[0,0,1]}

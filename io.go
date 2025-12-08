@@ -163,5 +163,3 @@ func isMTGene(name string) bool {
 	// this should be faster than strings.HasPrefix
 	return (b0 == 'M' || b0 == 'm') && (b1 == 'T' || b1 == 't') && b2 == '-'
 }
-
-func (mat.Dense)DensetoCsv(){}

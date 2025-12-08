@@ -1,0 +1,19 @@
+# Case 1: empty partition
+{"partition":[]}
+@ empty slice → result should also be an empty slice
+{"partition":[]}
+
+# Case 2: single element
+{"partition":[0]}
+@ single-element slice → result should be [0]
+{"partition":[0]}
+
+# Case 3: multiple elements
+{"partition":[0,1,1,2]}
+@ multi-element slice → result should be identical
+{"partition":[0,1,1,2]}
+
+# Case 4: negative and non-contiguous cluster IDs
+{"partition":[-1,3,3,10]}
+@ values are copied exactly as-is
+{"partition":[-1,3,3,10]}
