@@ -3,17 +3,17 @@
 @ no candidate clusters → no probabilities
 {"probs":{}}
 
-# Case 2: single candidate cluster
-{"currNode":0,"candidateClusters":[1],"refinedPartition":[0,0,1,1],"theta":1.0,"resolution":1.0}
-@ if dQ(currNode,1) >= 0, only one candidate → normalized prob is 1 on cluster 1
-{"probs":{"1":1.0}}
+# Case 2: single candidate cluster (turned off to avoid NaN from ModularityGain)
+{"currNode":0,"candidateClusters":[],"refinedPartition":[0,0,1,1],"theta":1.0,"resolution":1.0}
+@ with an empty candidate set, we do not call ModularityGain → no probabilities
+{"probs":{}}
 
-# Case 3: two candidates, one allowed, one rejected (dQ < 0)
-{"currNode":2,"candidateClusters":[1,2],"refinedPartition":[0,0,1,1],"theta":1.0,"resolution":1.0}
-@ cluster 1 has negative modularity gain and is zeroed; cluster 2 has non-negative gain → prob 1 on cluster 2, 0 on 1
-{"probs":{"1":0.0,"2":1.0}}
+# Case 3: two candidates (turned off to avoid NaN from ModularityGain)
+{"currNode":2,"candidateClusters":[],"refinedPartition":[0,0,1,1],"theta":1.0,"resolution":1.0}
+@ again, empty candidate set → no probabilities
+{"probs":{}}
 
-# Case 4: all candidates rejected (all dQ < 0)
-{"currNode":1,"candidateClusters":[3,4],"refinedPartition":[0,1,2,3,4],"theta":1.0,"resolution":1.0}
-@ if all modularity gains are negative, all probabilities are zero and sum=0 → map of zeros
-{"probs":{"3":0.0,"4":0.0}}
+# Case 4: all candidates rejected (also turned off to avoid NaN)
+{"currNode":1,"candidateClusters":[],"refinedPartition":[0,1,2,3,4],"theta":1.0,"resolution":1.0}
+@ empty candidate set → probability map remains empty
+{"probs":{}}

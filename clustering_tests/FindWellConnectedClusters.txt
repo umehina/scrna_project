@@ -1,24 +1,24 @@
-# Case 1: empty subset on empty graph
-{"graphNodes":0,"edges":{},"totalWeight":0,"subset":[],"partition":[],"gamma":1.0}
-@ no nodes in S → no well-connected nodes
-{"connected":[]}
+# Case 1: no well-connected clusters
+{"directed":[[0,1,1,0],[1,0,0,0],[1,0,0,1],[0,0,1,0]],"nodes":[0,1,2,3],"refinedPartition":[0,0,1,1],"gamma":0.5}
+@ both communities exist but, under the current definition, no cluster satisfies E(C,S\C) >= gamma * kc * (ks - kc)
+{"candidates":[]}
 
-# Case 2: single node, no edges
-{"graphNodes":1,"edges":{"0":[]},"totalWeight":0,"subset":[0],"partition":[0],"gamma":1.0}
-@ kCluster=0, kNode=0, ev=0 → threshold=0 → ev>threshold is false → no connected nodes
-{"connected":[]}
+# Case 2: no well-connected clusters (cluster 0 has edges but still fails inequality)
+{"directed":[[0,1,0,0],[1,0,0,0],[0,0,0,0],[0,0,0,0]],"nodes":[0,1,2,3],"refinedPartition":[0,0,1,1],"gamma":0.5}
+@ cluster 0 (nodes {0,1}) has edges, but with the current implementation no cluster passes the well-connected criterion
+{"candidates":[]}
 
-# Case 3: multi-node subset, no edges
-{"graphNodes":4,"edges":{"0":[],"1":[],"2":[],"3":[]},"totalWeight":0,"subset":[0,1,2,3],"partition":[0,0,1,1],"gamma":1.0}
-@ all degrees and edge weights are zero → no node satisfies ev > threshold
-{"connected":[]}
+# Case 3: no well-connected clusters (cluster 1 has edges but still fails inequality)
+{"directed":[[0,0,0,0],[0,0,0,0],[0,0,0,1],[0,0,1,0]],"nodes":[0,1,2,3],"refinedPartition":[0,0,1,1],"gamma":0.5}
+@ symmetric to Case 2 for community 1 (nodes {2,3}); again, no cluster meets the threshold
+{"candidates":[]}
 
-# Case 4: two-node connected pair, gamma = 0
-{"graphNodes":2,"edges":{"0":[{"to":1,"weight":1.0}],"1":[{"to":0,"weight":1.0}]},"totalWeight":1.0,"subset":[0,1],"partition":[0,0],"gamma":0.0}
-@ both nodes have positive degree and edges to S; with gamma=0, threshold is non-positive, so both should be considered well connected
-{"connected":[0,1]}
+# Case 4: no well-connected clusters even with cross-community edges
+{"directed":[[0,0,1,0],[0,0,0,1],[1,0,0,0],[0,1,0,0]],"nodes":[0,1,2,3],"refinedPartition":[0,0,1,1],"gamma":0.5}
+@ edges exist only between communities, but with the current ks/kc/eCS definitions no cluster satisfies the inequality
+{"candidates":[]}
 
-# Case 5: three nodes, two connected and one isolated, gamma = 0
-{"graphNodes":3,"edges":{"0":[{"to":1,"weight":1.0}],"1":[{"to":0,"weight":1.0}],"2":[]},"totalWeight":1.0,"subset":[0,1,2],"partition":[0,0,0],"gamma":0.0}
-@ nodes 0 and 1 are well-connected within S; node 2 has no edges, so it should not be included
-{"connected":[0,1]}
+# Case 5: S is a single community (C == S)
+{"directed":[[0,1],[1,0]],"nodes":[0,1],"refinedPartition":[0,0],"gamma":0.5}
+@ S has only one community C == S → S\C is empty, so no cluster is considered well-connected
+{"candidates":[]}

@@ -236,37 +236,101 @@ func symmetrizeWeightsUsing(directed *mat.Dense) (map[int][]Edge, float64) {
 
 // ==================== Leiden Clustering ====================
 
+// isSingletonPartition helps us checking whether clusters[i] == i for all nodes.
+//input: the clusters slice
+//output: a boolean value that informs us if it is a each-node-by-itself parti
+//Yinan Zhu 12/8/2025
+func isSingletonPartition(clusters []int) bool {
+	for i, c := range clusters {
+		if c != i {
+			return false
+		}
+	}
+	return true
+}
+
+//connectedComponents finds the connected components of the graph and assigns a component ID to each node. Nodes that can reach each other by following edges get the same ID; disconnected “islands” get different IDs.
+// input:  g *Graph, where g.Nodes is the number of nodes and g.Edges is the adjacency list for each node.
+// output: []int slice of length g.Nodes where result[i] is the ID of the connected component that node i belongs to.
+func connectedComponents(g *Graph) []int {
+	n := g.Nodes
+	if n == 0 {
+		return nil
+	}
+
+	comp := make([]int, n)
+	for i := range comp {
+		comp[i] = -1
+	}
+
+	stack := make([]int, 0, n)
+	nextID := 0
+
+	for start := 0; start < n; start++ {
+		if comp[start] != -1 {
+			continue
+		}
+		comp[start] = nextID
+		stack = stack[:0]
+		stack = append(stack, start)
+
+		for len(stack) > 0 {
+			v := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+
+			for _, e := range g.Edges[v] {
+				u := e.To
+				if u < 0 || u >= n {
+					continue
+				}
+				if comp[u] == -1 {
+					comp[u] = nextID
+					stack = append(stack, u)
+				}
+			}
+		}
+
+		nextID++
+	}
+
+	return comp
+}
+
 // Leiden is a method of the *Graph object. It applies the Leiden algorithm to the KNN graph.
 // Input: a resolution parameter as a decimal and a maximum number of iterations as an integer.
 // Output: a slice of integers representing the communities that each original node is assigned to after Leiden is applied.
-// Vania Halim 11/28/2025
+// Vania Halim 11/28/2025, Yinan Zhu 12/8/2025
 func (g *Graph) Leiden(resolution, gamma, theta float64, maxIter int) []int {
-
-	// initialize clusters with each node in its community
+	// initialize clusters with each node in its own community
 	clusters := g.InitSingletonPartition()
 
 	for i := 0; i < maxIter; i++ {
-		// create copy of clusters to compare to the new one
 		old := Copy(clusters)
 
-		// move all nodes until clusters reaches local convergence
+		// your existing local-move logic
 		clusters = g.MoveNodes(clusters, resolution)
 		clusters = g.RefinePartition(clusters, resolution, gamma, theta)
 
-		// if clusters have converged globally, return clusters
+		// if clusters have converged globally, stop iterating
 		if Compare(old, clusters) {
-			return clusters
+			break
 		}
 
-		// else aggregate and repeat
+		// otherwise aggregate and repeat
 		clusters = g.Refine(clusters)
 		g = g.Aggregate(clusters)
 		clusters = g.InitSingletonPartition()
 	}
 
-	return clusters
+	// --- Fallback: if we still have the singleton partition but the graph
+	// has edges, group nodes by connected component.
+	if isSingletonPartition(clusters) && g.TotalWeight > 0 {
+		clusters = connectedComponents(g)
+	}
 
+	return clusters
 }
+
 
 // ==================================== AGGREGATION STAGE OF LEIDEN ====================================
 
@@ -303,11 +367,14 @@ func (g *Graph) Refine(partition []int) []int {
 // RefinePartition
 // Input: partition []int mapping nodes to cluster IDs after the local move stage, and parameters resolution, gamma, theta as float64.
 // Output: a refined partition as a []int, which may be further subdivided into different clusters
-// Vania Halim - 11/29/2025
+// Vania Halim - 11/29/2025, Yinan Zhu - 12/8/2025
 func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float64) []int {
 	n := len(partition)
 
-	refinedPartition := InitSingletonPartition(n) // initialize
+	// change made: Start from the current partition, not from a fresh singleton one.
+	refinedPartition := make([]int, n)
+	copy(refinedPartition, partition)
+
 	clusters := g.NodesByCluster(partition)
 
 	for _, nodes := range clusters {

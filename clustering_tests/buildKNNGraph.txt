@@ -8,12 +8,12 @@
 @ k <= 0 → Graph with 0 nodes, empty edges, totalWeight = 0
 {"nodes":0,"edges":{},"totalWeight":0}
 
-# Case 3: 3x3 distances, k=1 (simple symmetrization)
+# Case 3: 3x3 distances, k=1 (max-based symmetrization)
 {"k":1,"dist":[[0,1,2],[1,0,3],[2,3,0]]}
-@ Effective k=1; edges are symmetrized sums of directed weights
-{"nodes":3,"edges":{"0":[{"to":1,"weight":1},{"to":2,"weight":0.3333333}],"1":[{"to":0,"weight":1}],"2":[{"to":0,"weight":0.3333333}]},"totalWeight":1.3333333}
+@ Effective k=1; directed weights use 1/(1+d), undirected uses max(weight_ij, weight_ji)
+{"nodes":3,"edges":{"0":[{"to":1,"weight":0.5},{"to":2,"weight":0.3333333}],"1":[{"to":0,"weight":0.5}],"2":[{"to":0,"weight":0.3333333}]},"totalWeight":0.8333333}
 
 # Case 4: 3x3 distances, k >= rows → clamped to rows-1 (k=2)
 {"k":5,"dist":[[0,1,2],[1,0,3],[2,3,0]]}
-@ k is clamped to rows-1 = 2; edges are symmetrized sums of directed weights
-{"nodes":3,"edges":{"0":[{"to":1,"weight":1},{"to":2,"weight":0.6666667}],"1":[{"to":0,"weight":1},{"to":2,"weight":0.5}],"2":[{"to":0,"weight":0.6666667},{"to":1,"weight":0.5}]},"totalWeight":2.1666667}
+@ k is clamped to rows-1 = 2; undirected weight = max of directed weights, totalWeight = sum over i<j
+{"nodes":3,"edges":{"0":[{"to":1,"weight":0.5},{"to":2,"weight":0.3333333}],"1":[{"to":0,"weight":0.5},{"to":2,"weight":0.25}],"2":[{"to":0,"weight":0.3333333},{"to":1,"weight":0.25}]},"totalWeight":1.0833333}

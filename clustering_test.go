@@ -12,6 +12,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"fmt"
+	"sort"
+	"math/rand"
+	
 
 	"gonum.org/v1/gonum/mat"
 )
@@ -118,6 +122,12 @@ func almostEqual(a, b, tol float64) bool {
 	return math.Abs(a-b) <= tol
 }
 
+// floatAlmostEqual kept for compatibility with older test code that calls
+// floatAlmostEqual; it behaves identically to almostEqual.
+func floatAlmostEqual(a, b, tol float64) bool {
+	return math.Abs(a-b) <= tol
+}
+
 func TestDistanceMatrix_FromFile(t *testing.T) {
 	const path = "clustering_tests/DistanceMatrix_tests.txt"
 
@@ -208,21 +218,9 @@ func TestDistanceMatrix_FromFile(t *testing.T) {
 }
 
 
-// ---------- generic # / @ / JSON parser ----------
 
 
-// loadIOCasesFromFile parses a text file with repeated blocks:
-//
-//   # Case name
-//   <input JSON>
-//   @ comment (ignored for parsing)
-//   <output JSON>
-
-// ---------- specialized parser for fillDirectedKNNWeights ----------
-
-// knnWeightsInput matches the *input* JSON:
-//
-//   {"k":1,"dist":[[0,1,2],[1,0,3],[2,3,0]]}
+// parser for Euclidean
 //
 type knnWeightsInput struct {
 	K    int         `json:"k"`
@@ -331,16 +329,36 @@ func loadEuclideanCases(path string) ([]EuclideanCase, error) {
 	return result, nil
 }
 
-// ---------- parser for buildKNNGraph ----------
-// loadIOCasesFromFile parses a text file with repeated blocks:
-//
-//   # Case name
-//   <input JSON>
-//   @ comment (ignored for parsing)
-//   <output JSON>
-//
+// test for Euclidean
+func TestEuclidean_FromFile(t *testing.T) {
+    const testFile = "clustering_tests/Euclidean.txt"
 
-// ---------- specialized structs for BuildKNNGraph ----------
+    cases, err := loadEuclideanCases(testFile)
+    if err != nil {
+        t.Fatalf("failed to load Euclidean cases from %s: %v", testFile, err)
+    }
+
+    almostEqual := func(a, b, tol float64) bool {
+        return math.Abs(a-b) <= tol
+    }
+
+    for idx, tc := range cases {
+        tc := tc
+        name := fmt.Sprintf("case_%02d_%s", idx, tc.Name)
+
+        t.Run(name, func(t *testing.T) {
+            got := Euclidean(tc.Input.First, tc.Input.Second)
+            want := tc.Output.Dist
+
+            if !almostEqual(got, want, 1e-6) {
+                t.Fatalf("Euclidean(%v, %v) = %v, want %v",
+                    tc.Input.First, tc.Input.Second, got, want)
+            }
+        })
+    }
+}
+
+// ---------- parser for buildKNNGraph ----------
 
 // knnGraphInput matches the *input* JSON:
 //
@@ -406,7 +424,114 @@ func loadBuildKNNGraphCases(path string) ([]BuildKNNGraphCase, error) {
 	return result, nil
 }
 
-// ---------- parser for DirectedKNNWeight ----------
+func TestBuildKNNGraph_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/buildKNNGraph.txt"
+
+	cases, err := loadBuildKNNGraphCases(testFile)
+	if err != nil {
+		t.Fatalf("failed to load BuildKNNGraph cases from %s: %v", testFile, err)
+	}
+
+	almostEqual := func(a, b, tol float64) bool {
+		return math.Abs(a-b) <= tol
+	}
+
+	for idx, tc := range cases {
+		tc := tc
+		name := fmt.Sprintf("case_%02d_%s", idx, tc.Name)
+
+		t.Run(name, func(t *testing.T) {
+			// ---------- build distance matrix from input ----------
+			distVals := tc.Input.Dist
+			rows := len(distVals)
+			cols := 0
+			if rows > 0 {
+				cols = len(distVals[0])
+			}
+
+			var distMtx *mat.Dense
+
+			if rows == 0 {
+				// Special-case: empty distance matrix.
+				// Use zero-value mat.Dense so Dims() returns (0,0) without panic.
+				var d mat.Dense
+				distMtx = &d
+			} else {
+				distMtx = mat.NewDense(rows, cols, nil)
+				for i := 0; i < rows; i++ {
+					if len(distVals[i]) != cols {
+						t.Fatalf("row %d has length %d, expected %d", i, len(distVals[i]), cols)
+					}
+					for j := 0; j < cols; j++ {
+						distMtx.Set(i, j, distVals[i][j])
+					}
+				}
+			}
+
+			// ---------- call function under test ----------
+			got := BuildKNNGraph(distMtx, tc.Input.K)
+
+			// ---------- check Nodes ----------
+			if got.Nodes != tc.Output.Nodes {
+				t.Fatalf("Nodes = %d, want %d", got.Nodes, tc.Output.Nodes)
+			}
+
+			// ---------- check TotalWeight ----------
+			if !almostEqual(got.TotalWeight, tc.Output.TotalWeight, 1e-6) {
+				t.Fatalf("TotalWeight = %v, want %v", got.TotalWeight, tc.Output.TotalWeight)
+			}
+
+			// ---------- check Edges (order-independent) ----------
+
+			// expected: map[from][to]weight
+			expEdgeMap := make(map[int]map[int]float64)
+			for from, es := range tc.Output.Edges {
+				if expEdgeMap[from] == nil {
+					expEdgeMap[from] = make(map[int]float64)
+				}
+				for _, e := range es {
+					expEdgeMap[from][e.To] = e.Weight
+				}
+			}
+
+			// for each node in got, build got map[from][to]weight and compare
+			for from := 0; from < got.Nodes; from++ {
+				gotAdj := got.Edges[from]
+				gotMap := make(map[int]float64, len(gotAdj))
+				for _, e := range gotAdj {
+					gotMap[e.To] = e.Weight
+				}
+
+				expMap, hasExp := expEdgeMap[from]
+				if !hasExp {
+					// if node wasn't in expected edges, it should have no outgoing edges
+					if len(gotMap) != 0 {
+						t.Fatalf("node %d: expected no outgoing edges, got %v", from, gotMap)
+					}
+					continue
+				}
+
+				if len(gotMap) != len(expMap) {
+					t.Fatalf("node %d: got %d neighbors, want %d; got=%v, want=%v",
+						from, len(gotMap), len(expMap), gotMap, expMap)
+				}
+
+				for to, wWant := range expMap {
+					wGot, ok := gotMap[to]
+					if !ok {
+						t.Fatalf("node %d: missing edge to %d; got=%v, want edge with weight %v",
+							from, to, gotMap, wWant)
+					}
+					if !almostEqual(wGot, wWant, 1e-6) {
+						t.Fatalf("edge %d->%d: weight=%v, want %v", from, to, wGot, wWant)
+					}
+				}
+			}
+		})
+	}
+}
+
+// ---------- parser for fillDirectedKNNWeight ----------
 
 
 
@@ -647,6 +772,43 @@ func parseGetNeighborsRowRawCases(path string) ([]getNeighborsRowRawCase, error)
 	return cases, nil
 }
 
+//test function for fillDirectedKNNWeights
+func TestGetNeighborsRow_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/fillDirectedKNNWeights.txt"
+
+	cases, err := loadGetNeighborsRowCases(testFile)
+	if err != nil {
+		t.Fatalf("failed to load getNeighborsRow cases from %s: %v", testFile, err)
+	}
+
+	almostEqual := func(a, b, tol float64) bool {
+		return math.Abs(a-b) <= tol
+	}
+
+	for idx, tc := range cases {
+		tc := tc
+		name := fmt.Sprintf("getNeighbors_case_%02d_%s", idx, tc.Name)
+
+		t.Run(name, func(t *testing.T) {
+			neighbors := getNeighborsRow(tc.Row, tc.R)
+
+			if len(neighbors) != len(tc.Idx) {
+				t.Fatalf("len(neighbors) = %d, want %d", len(neighbors), len(tc.Idx))
+			}
+
+			for i, n := range neighbors {
+				if n.Index != tc.Idx[i] {
+					t.Fatalf("neighbor[%d].Index = %d, want %d", i, n.Index, tc.Idx[i])
+				}
+				if !almostEqual(n.Distance, tc.Dist[i], 1e-6) {
+					t.Fatalf("neighbor[%d].Distance = %v, want %v", i, n.Distance, tc.Dist[i])
+				}
+			}
+		})
+	}
+}
+
+
 // ---------- parser for topKNeighbors ----------
 
 
@@ -775,6 +937,60 @@ func parseTopKNeighborsRawCases(path string) ([]topKRawCase, error) {
 
 	return cases, nil
 }
+func TestTopKNeighbors_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/topKNeighbors.txt"
+
+	cases, err := loadTopKNeighborsCases(testFile)
+	if err != nil {
+		t.Fatalf("failed to load topKNeighbors cases from %s: %v", testFile, err)
+	}
+
+	almostEqual := func(a, b, tol float64) bool {
+		return math.Abs(a-b) <= tol
+	}
+
+	for idx, tc := range cases {
+		tc := tc
+		name := fmt.Sprintf("topKNeighbors_case_%02d_%s", idx, tc.Name)
+
+		t.Run(name, func(t *testing.T) {
+			// sanity check: input idx/dist lengths must match
+			if len(tc.InputIdx) != len(tc.InputDist) {
+				t.Fatalf("input length mismatch: len(InputIdx) = %d, len(InputDist) = %d",
+					len(tc.InputIdx), len(tc.InputDist))
+			}
+
+			// build []Neighbor from InputIdx/InputDist
+			neighbors := make([]Neighbor, len(tc.InputIdx))
+			for i := range tc.InputIdx {
+				neighbors[i] = Neighbor{
+					Index:    tc.InputIdx[i],
+					Distance: tc.InputDist[i],
+				}
+			}
+
+			// call function under test
+			got := topKNeighbors(neighbors, tc.K)
+
+			// expected lengths
+			if len(got) != len(tc.OutputIdx) || len(got) != len(tc.OutputDist) {
+				t.Fatalf("len(got) = %d, want %d (OutputIdx) and %d (OutputDist)",
+					len(got), len(tc.OutputIdx), len(tc.OutputDist))
+			}
+
+			// element-wise check
+			for i, n := range got {
+				if n.Index != tc.OutputIdx[i] {
+					t.Fatalf("got[%d].Index = %d, want %d", i, n.Index, tc.OutputIdx[i])
+				}
+				if !almostEqual(n.Distance, tc.OutputDist[i], 1e-6) {
+					t.Fatalf("got[%d].Distance = %v, want %v", i, n.Distance, tc.OutputDist[i])
+				}
+			}
+		})
+	}
+}
+
 
 // ---------- parser for distanceToWeights ----------
 
@@ -893,6 +1109,34 @@ func parseDistanceToWeightRawCases(path string) ([]dtwRawCase, error) {
 	}
 
 	return cases, nil
+}
+
+func TestDistanceToWeight_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/distanceToWeights.txt"
+
+	cases, err := loadDistanceToWeightCases(testFile)
+	if err != nil {
+		t.Fatalf("failed to load distanceToWeight cases from %s: %v", testFile, err)
+	}
+
+	almostEqual := func(a, b, tol float64) bool {
+		return math.Abs(a-b) <= tol
+	}
+
+	for idx, tc := range cases {
+		tc := tc
+		name := fmt.Sprintf("distanceToWeight_case_%02d_%s", idx, tc.Name)
+
+		t.Run(name, func(t *testing.T) {
+			got := distanceToWeight(tc.Distance)
+			want := tc.Weight
+
+			// looser tolerance to account for rounding in the JSON (e.g. 0.2857143)
+			if !almostEqual(got, want, 1e-6) {
+				t.Fatalf("distanceToWeight(%v) = %v, want %v", tc.Distance, got, want)
+			}
+		})
+	}
 }
 
 // ---------- parser for symmetricWeightUsing ----------
@@ -1021,6 +1265,100 @@ func parseSymmetrizeWeightsRawCases(path string) ([]symmRawCase, error) {
 	}
 
 	return cases, nil
+}
+
+func TestSymmetrizeWeightsUsing_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/symmetrizeWeightsUsing.txt"
+
+	cases, err := loadSymmetrizeWeightsCases(testFile)
+	if err != nil {
+		t.Fatalf("failed to load symmetrizeWeightsUsing cases from %s: %v", testFile, err)
+	}
+
+	almostEqual := func(a, b, tol float64) bool {
+		return math.Abs(a-b) <= tol
+	}
+
+	for idx, tc := range cases {
+		tc := tc
+		name := fmt.Sprintf("symmetrize_case_%02d_%s", idx, tc.Name)
+
+		t.Run(name, func(t *testing.T) {
+			// ---------- build directed *mat.Dense from tc.Directed ----------
+			dvals := tc.Directed
+			rows := len(dvals)
+			cols := 0
+			if rows > 0 {
+				cols = len(dvals[0])
+			}
+
+			directed := mat.NewDense(rows, cols, nil)
+			for i := 0; i < rows; i++ {
+				if len(dvals[i]) != cols {
+					t.Fatalf("row %d has length %d, expected %d", i, len(dvals[i]), cols)
+				}
+				for j := 0; j < cols; j++ {
+					directed.Set(i, j, dvals[i][j])
+				}
+			}
+
+			// ---------- call function under test ----------
+			gotEdges, gotTotal := symmetrizeWeightsUsing(directed)
+
+			// ---------- check TotalWeight ----------
+			if !almostEqual(gotTotal, tc.TotalWeight, 1e-6) {
+				t.Fatalf("TotalWeight = %v, want %v", gotTotal, tc.TotalWeight)
+			}
+
+			// ---------- check edges (order-independent) ----------
+
+			// build expected map[from][to]weight
+			expEdgeMap := make(map[int]map[int]float64)
+			for from, es := range tc.Edges {
+				if expEdgeMap[from] == nil {
+					expEdgeMap[from] = make(map[int]float64)
+				}
+				for _, e := range es {
+					expEdgeMap[from][e.To] = e.Weight
+				}
+			}
+
+			// we know the number of nodes = rows of the directed matrix
+			for from := 0; from < rows; from++ {
+				gotAdj := gotEdges[from]
+				gotMap := make(map[int]float64, len(gotAdj))
+				for _, e := range gotAdj {
+					gotMap[e.To] = e.Weight
+				}
+
+				expMap, hasExp := expEdgeMap[from]
+				if !hasExp {
+					// if not present in expected, we expect no outgoing edges
+					if len(gotMap) != 0 {
+						t.Fatalf("node %d: expected no edges, got %v", from, gotMap)
+					}
+					continue
+				}
+
+				if len(gotMap) != len(expMap) {
+					t.Fatalf("node %d: got %d neighbors, want %d; got=%v, want=%v",
+						from, len(gotMap), len(expMap), gotMap, expMap)
+				}
+
+				for to, wWant := range expMap {
+					wGot, ok := gotMap[to]
+					if !ok {
+						t.Fatalf("node %d: missing edge to %d; got=%v, want edge weight %v",
+							from, to, gotMap, wWant)
+					}
+					if !almostEqual(wGot, wWant, 1e-6) {
+						t.Fatalf("edge %d->%d: weight=%v, want %v",
+							from, to, wGot, wWant)
+					}
+				}
+			}
+		})
+	}
 }
 
 // ---------- parser for Leiden----------
@@ -1181,6 +1519,38 @@ func parseLeidenRawCases(path string) ([]leidenRawCase, error) {
 	return cases, nil
 }
 
+func TestLeiden_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/Leiden.txt"
+
+	cases, err := loadLeidenCases(testFile)
+	if err != nil {
+		t.Fatalf("loadLeidenCases(%q) error: %v", testFile, err)
+	}
+	if len(cases) == 0 {
+		t.Fatalf("no Leiden test cases loaded from %q", testFile)
+	}
+
+	for idx, tc := range cases {
+		name := fmt.Sprintf("case_%02d_%s", idx, strings.TrimSpace(tc.Name))
+
+		t.Run(name, func(t *testing.T) {
+			got := tc.Graph.Leiden(tc.Resolution, tc.Gamma, tc.Theta, tc.MaxIter)
+
+			if len(got) != len(tc.Clusters) {
+				t.Fatalf("clusters length mismatch: got %d, want %d; got=%v, want=%v",
+					len(got), len(tc.Clusters), got, tc.Clusters)
+			}
+
+			for i := range got {
+				if got[i] != tc.Clusters[i] {
+					t.Fatalf("clusters differ at index %d: got %v, want %v",
+						i, got, tc.Clusters)
+				}
+			}
+		})
+	}
+}
+
 // ---------- parser for Refine ----------
 
 // RefineCase is one fully parsed test case for Graph.Refine.
@@ -1298,6 +1668,43 @@ func parseRefineRawCases(path string) ([]refineRawCase, error) {
 	}
 
 	return cases, nil
+}
+
+func TestRefine_FromFile(t *testing.T) {
+    const testFile = "clustering_tests/Refine.txt" // adjust if your path is different
+
+    cases, err := loadRefineCases(testFile)
+    if err != nil {
+        t.Fatalf("loadRefineCases(%q) error: %v", testFile, err)
+    }
+    if len(cases) == 0 {
+        t.Fatalf("no Refine test cases loaded from %q", testFile)
+    }
+
+    for idx, tc := range cases {
+        name := fmt.Sprintf("case_%02d_%s", idx, strings.TrimSpace(tc.Name))
+
+        t.Run(name, func(t *testing.T) {
+            // If Refine is a method on Graph, like:
+            //     func (g *Graph) Refine(partition []int) []int
+            // we can just use an empty graph here, since your test
+            // cases only depend on the partition, not on g.
+            var g Graph
+            got := g.Refine(tc.Partition)
+
+            if len(got) != len(tc.Clusters) {
+                t.Fatalf("length mismatch: got %d, want %d; got=%v, want=%v",
+                    len(got), len(tc.Clusters), got, tc.Clusters)
+            }
+
+            for i := range got {
+                if got[i] != tc.Clusters[i] {
+                    t.Fatalf("clusters differ at index %d: got %v, want %v",
+                        i, got, tc.Clusters)
+                }
+            }
+        })
+    }
 }
 
 // parser for RefinePartition
@@ -1483,6 +1890,42 @@ func parseRefinePartitionRawCases(path string) ([]refinePartitionRawCase, error)
 	type output struct {
 		Clusters []int `json:"clusters"`
 	}
+
+
+
+func TestRefinePartition_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/RefinePartition.txt" // adjust if needed
+
+	cases, err := loadRefinePartitionCases(testFile)
+	if err != nil {
+		t.Fatalf("loadRefinePartitionCases(%q) error: %v", testFile, err)
+	}
+	if len(cases) == 0 {
+		t.Fatalf("no RefinePartition test cases loaded from %q", testFile)
+	}
+
+	for idx, tc := range cases {
+		name := fmt.Sprintf("case_%02d_%s", idx, strings.TrimSpace(tc.Name))
+
+		t.Run(name, func(t *testing.T) {
+			// Assuming your method signature is:
+			// func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float64) []int
+			got := tc.Graph.RefinePartition(tc.Partition, tc.Resolution, tc.Gamma, tc.Theta)
+
+			if len(got) != len(tc.Clusters) {
+				t.Fatalf("length mismatch: got %d, want %d; got=%v, want=%v",
+					len(got), len(tc.Clusters), got, tc.Clusters)
+			}
+
+			for i := range got {
+				if got[i] != tc.Clusters[i] {
+					t.Fatalf("clusters differ at index %d: got %v, want %v",
+						i, got, tc.Clusters)
+				}
+			}
+		})
+	}
+}
 
 
 		
@@ -1752,6 +2195,39 @@ func parseGraphInitSingletonPartitionRawCases(path string) ([]graphInitSingleton
 	return cases, nil
 }
 
+
+func TestInitSingletonPartition_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/InitSingletonPartition.txt" // adjust path if needed
+
+	cases, err := loadInitSingletonPartitionCases(testFile)
+	if err != nil {
+		t.Fatalf("loadInitSingletonPartitionCases(%q) error: %v", testFile, err)
+	}
+	if len(cases) == 0 {
+		t.Fatalf("no InitSingletonPartition test cases loaded from %q", testFile)
+	}
+
+	for idx, tc := range cases {
+		name := fmt.Sprintf("case_%02d_%s", idx, strings.TrimSpace(tc.Name))
+
+		t.Run(name, func(t *testing.T) {
+			got := InitSingletonPartition(tc.N)
+
+			if len(got) != len(tc.Partition) {
+				t.Fatalf("length mismatch: got %d, want %d; got=%v, want=%v",
+					len(got), len(tc.Partition), got, tc.Partition)
+			}
+
+			for i := range got {
+				if got[i] != tc.Partition[i] {
+					t.Fatalf("partition differs at index %d: got %v, want %v",
+						i, got, tc.Partition)
+				}
+			}
+		})
+	}
+}
+
 // parser for NodesByCluster
 
 // NodesByClusterCase is one fully parsed test case for NodesByCluster.
@@ -1871,7 +2347,53 @@ func parseNodesByClusterRawCases(path string) ([]nodesByClusterRawCase, error) {
 	return cases, nil
 }
 
-//parser for refinedPartition
+func TestNodesByCluster_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/NodesByCluster.txt" // adjust path if needed
+
+	cases, err := loadNodesByClusterCases(testFile)
+	if err != nil {
+		t.Fatalf("loadNodesByClusterCases(%q) error: %v", testFile, err)
+	}
+	if len(cases) == 0 {
+		t.Fatalf("no NodesByCluster test cases loaded from %q", testFile)
+	}
+
+	for idx, tc := range cases {
+		name := fmt.Sprintf("case_%02d_%s", idx, strings.TrimSpace(tc.Name))
+
+		t.Run(name, func(t *testing.T) {
+			// Graph isn't actually needed by NodesByCluster, so an empty one is fine.
+			var g Graph
+			got := g.NodesByCluster(tc.Partition)
+
+			// Compare map sizes
+			if len(got) != len(tc.Groups) {
+				t.Fatalf("group count mismatch: got %d, want %d; got=%v, want=%v",
+					len(got), len(tc.Groups), got, tc.Groups)
+			}
+
+			// Compare each group
+			for cid, wantNodes := range tc.Groups {
+				gotNodes, ok := got[cid]
+				if !ok {
+					t.Fatalf("missing cluster %d in result; got=%v, want=%v", cid, got, tc.Groups)
+				}
+				if len(gotNodes) != len(wantNodes) {
+					t.Fatalf("cluster %d size mismatch: got %d, want %d; got=%v, want=%v",
+						cid, len(gotNodes), len(wantNodes), gotNodes, wantNodes)
+				}
+				for i := range gotNodes {
+					if gotNodes[i] != wantNodes[i] {
+						t.Fatalf("cluster %d nodes differ at index %d: got %v, want %v",
+							cid, i, gotNodes, wantNodes)
+					}
+				}
+			}
+		})
+	}
+}
+
+//parser for MergeNodesSubset
 
 
 // MergeNodesSubsetCase is one fully parsed test case for Graph.MergeNodesSubset.
@@ -2007,119 +2529,171 @@ func parseMergeNodesSubsetRawCases(path string) ([]mergeNodesSubsetRawCase, erro
 	return cases, nil
 }
 
-// parser for FindWellConnectedClusters
+func TestMergeNodesSubset_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/MergeNodesSubset.txt" // put those 4 cases here
 
-// EdgeJSON is a lightweight version of Edge for JSON decoding.
-
-
-// FindWellConnectedClustersCase is one fully parsed test case
-// for Graph.FindWellConnectedClusters.
-type FindWellConnectedClustersCase struct {
-	Name            string
-	Graph           *Graph
-	Subset          []int
-	RefinedPartition []int
-	Gamma           float64
-	Clusters        []int
-}
-
-// loadFindWellConnectedClustersCases reads a file with blocks:
-//
-//   # Case name
-//   {"nodes":...,"edges":{...},"totalWeight":...,
-//    "subset":[...],"refinedPartition":[...],"gamma":...}
-//   @ some comment
-//   {"clusters":[...]}
-//
-// and returns all parsed cases.
-func loadFindWellConnectedClustersCases(path string) ([]FindWellConnectedClustersCase, error) {
-	rawCases, err := parseFindWellConnectedClustersRawCases(path)
+	cases, err := loadMergeNodesSubsetCases(testFile)
 	if err != nil {
-		return nil, err
+		t.Fatalf("loadMergeNodesSubsetCases(%q) error: %v", testFile, err)
+	}
+	if len(cases) == 0 {
+		t.Fatalf("no MergeNodesSubset test cases loaded from %q", testFile)
 	}
 
-	// JSON shapes for input/output.
-	type input struct {
-		Nodes            int                  `json:"nodes"`
-		Edges            map[int][]EdgeJSON   `json:"edges"`
-		TotalWeight      float64              `json:"totalWeight"`
-		Subset           []int                `json:"subset"`
-		RefinedPartition []int                `json:"refinedPartition"`
-		Gamma            float64              `json:"gamma"`
-	}
-	type output struct {
-		Clusters []int `json:"clusters"`
-	}
+	for idx, tc := range cases {
+		name := fmt.Sprintf("case_%02d_%s", idx, strings.TrimSpace(tc.Name))
 
-	cases := make([]FindWellConnectedClustersCase, 0, len(rawCases))
-	for _, rc := range rawCases {
-		var in input
-		if err := json.Unmarshal([]byte(rc.InputLine), &in); err != nil {
-			return nil, err
-		}
+		t.Run(name, func(t *testing.T) {
+			var g Graph
 
-		var out output
-		if err := json.Unmarshal([]byte(rc.OutputLine), &out); err != nil {
-			return nil, err
-		}
+			// If your method is named MergeNodes instead of MergeNodesSubset,
+			// just change this call accordingly.
+			got := g.MergeNodesSubset(
+				tc.Nodes,
+				tc.Partition,
+				tc.RefinedPartition,
+				tc.Resolution,
+				tc.Gamma,
+				tc.Theta,
+			)
 
-		// convert EdgeJSON → Edge
-		edges := make(map[int][]Edge, len(in.Edges))
-		for from, ejs := range in.Edges {
-			es := make([]Edge, len(ejs))
-			for i, ej := range ejs {
-				es[i] = Edge{
-					To:     ej.To,
-					Weight: ej.Weight,
+			if len(got) != len(tc.Expected) {
+				t.Fatalf("length mismatch: got %d, want %d; got=%v, want=%v",
+					len(got), len(tc.Expected), got, tc.Expected)
+			}
+
+			for i := range got {
+				if got[i] != tc.Expected[i] {
+					t.Fatalf("partition differs at index %d: got %v, want %v",
+						i, got, tc.Expected)
 				}
 			}
-			edges[from] = es
-		}
-
-		g := &Graph{
-			Nodes:       in.Nodes,
-			Edges:       edges,
-			TotalWeight: in.TotalWeight,
-		}
-
-		cases = append(cases, FindWellConnectedClustersCase{
-			Name:             rc.Name,
-			Graph:            g,
-			Subset:           in.Subset,
-			RefinedPartition: in.RefinedPartition,
-			Gamma:            in.Gamma,
-			Clusters:         out.Clusters,
 		})
 	}
-
-	return cases, nil
 }
 
-// ---------- internal raw parser for "# / JSON / @ / JSON" ----------
+// parser for FindWellConnectedClusters
 
-type findWellConnectedClustersRawCase struct {
+
+// -----------------------------------------------------------------------------
+// Helpers (you can reuse existing ones if you already have them)
+// -----------------------------------------------------------------------------
+
+// tcName generates a nice subtest name like "case_01_name".
+func tcName(idx int, name string) string {
+	base := fmt.Sprintf("case_%02d", idx+1)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return base
+	}
+	name = strings.ReplaceAll(name, " ", "_")
+	return base + "_" + name
+}
+
+// equalIntSlicesIgnoringOrder compares two int slices as sets (ignores order).
+func equalIntSlicesIgnoringOrder(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	aa := append([]int(nil), a...)
+	bb := append([]int(nil), b...)
+	sort.Ints(aa)
+	sort.Ints(bb)
+	for i := range aa {
+		if aa[i] != bb[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// buildGraphFromDirected constructs a *Graph from a symmetric adjacency matrix
+// where directed[i][j] is the weight from node i to node j.
+//
+// IMPORTANT: adapt this to your actual Graph / Edge types.
+func buildGraphFromDirected(directed [][]float64) *Graph {
+	g := &Graph{}
+
+	// Example if you have:
+	//   type Edge struct { To int; Weight float64 }
+	//   type Graph struct { Edges map[int][]Edge }
+	//
+	// g.Edges = make(map[int][]Edge)
+	// for i := range directed {
+	//     for j, w := range directed[i] {
+	//         if w == 0 {
+	//             continue
+	//         }
+	//         g.Edges[i] = append(g.Edges[i], Edge{To: j, Weight: w})
+	//     }
+	// }
+	//
+	// return g
+
+	return g
+}
+
+// -----------------------------------------------------------------------------
+// Parser for FindWellConnectedClusters test cases
+//
+
+//
+//   # Case name
+//   {"directed":[[...]],"subset":[...],"refinedPartition":[...],"gamma":0.5}
+//   @ some comment
+//   {"candidates":[...]}
+// -----------------------------------------------------------------------------
+
+// FindWellConnectedClustersRawCase is one raw block from the text file.
+type FindWellConnectedClustersRawCase struct {
 	Name       string
 	InputLine  string
 	OutputLine string
 }
 
-func parseFindWellConnectedClustersRawCases(path string) ([]findWellConnectedClustersRawCase, error) {
+// parseFindWellConnectedClustersRawCases reads the text file and returns all
+// raw cases (name + input JSON line + output JSON line).
+func parseFindWellConnectedClustersRawCases(path string) ([]FindWellConnectedClustersRawCase, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
 
+	scanner := bufio.NewScanner(f)
+
 	var (
-		cases            []findWellConnectedClustersRawCase
-		currentName      string
-		pendingInput     string
-		waitingForInput  bool
-		waitingForOutput bool
+		cases                                  []FindWellConnectedClustersRawCase
+		currentName                            string
+		inputLine, outputLine                  string
+		waitingForInput, waitingForOutput bool
+		lineNum                                int
 	)
 
-	scanner := bufio.NewScanner(f)
+	flushCase := func() error {
+		if inputLine == "" && outputLine == "" {
+			return nil
+		}
+		if inputLine == "" || outputLine == "" {
+			return fmt.Errorf("incomplete case %q: missing input or output", currentName)
+		}
+		name := strings.TrimSpace(currentName)
+		if name == "" {
+			name = fmt.Sprintf("unnamed_%d", len(cases)+1)
+		}
+		cases = append(cases, FindWellConnectedClustersRawCase{
+			Name:       name,
+			InputLine:  inputLine,
+			OutputLine: outputLine,
+		})
+		currentName = ""
+		inputLine, outputLine = "", ""
+		waitingForInput, waitingForOutput = false, false
+		return nil
+	}
+
 	for scanner.Scan() {
+		lineNum++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
@@ -2127,38 +2701,126 @@ func parseFindWellConnectedClustersRawCases(path string) ([]findWellConnectedClu
 
 		switch {
 		case strings.HasPrefix(line, "#"):
-			// start a new case
+			// New case header – flush previous case (if any).
+			if err := flushCase(); err != nil {
+				return nil, fmt.Errorf("line %d: %w", lineNum, err)
+			}
 			currentName = strings.TrimSpace(strings.TrimPrefix(line, "#"))
-			pendingInput = ""
-			waitingForInput = true
-			waitingForOutput = false
+			waitingForInput, waitingForOutput = true, false
 
 		case strings.HasPrefix(line, "@"):
-			// comment between input and output
-			waitingForOutput = true
+			// Comment line – next JSON line is the output.
+			waitingForInput, waitingForOutput = false, true
 
 		default:
+			// JSON line.
 			if waitingForInput {
-				// this is the input JSON line
-				pendingInput = line
-				waitingForInput = false
+				if inputLine != "" {
+					return nil, fmt.Errorf("line %d: multiple input JSON lines for case %q", lineNum, currentName)
+				}
+				inputLine = line
 			} else if waitingForOutput {
-				// this is the output JSON line → finalize case
-				cases = append(cases, findWellConnectedClustersRawCase{
-					Name:       currentName,
-					InputLine:  pendingInput,
-					OutputLine: line,
-				})
-				waitingForOutput = false
+				if outputLine != "" {
+					return nil, fmt.Errorf("line %d: multiple output JSON lines for case %q", lineNum, currentName)
+				}
+				outputLine = line
+			} else {
+				return nil, fmt.Errorf("line %d: unexpected JSON without header/@: %q", lineNum, line)
 			}
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan %s: %w", path, err)
+	}
+	if err := flushCase(); err != nil {
 		return nil, err
 	}
 
 	return cases, nil
+}
+
+// -----------------------------------------------------------------------------
+// Typed cases + loader
+// -----------------------------------------------------------------------------
+
+// FindWellConnectedClustersCase is one fully-parsed test case.
+type FindWellConnectedClustersCase struct {
+	Name             string
+	Graph            *Graph
+	Subset           []int
+	RefinedPartition []int
+	Gamma            float64
+	Candidates       []int
+}
+
+// loadFindWellConnectedClustersCases converts raw cases into typed cases,
+// building a *Graph from the "directed" adjacency matrix for each case.
+func loadFindWellConnectedClustersCases(path string) ([]FindWellConnectedClustersCase, error) {
+	rawCases, err := parseFindWellConnectedClustersRawCases(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// JSON shapes that match the test file.
+	type input struct {
+		Directed         [][]float64 `json:"directed"`
+		Subset           []int       `json:"subset"`
+		RefinedPartition []int       `json:"refinedPartition"`
+		Gamma            float64     `json:"gamma"`
+	}
+	type output struct {
+		Candidates []int `json:"candidates"`
+	}
+
+	cases := make([]FindWellConnectedClustersCase, 0, len(rawCases))
+	for _, rc := range rawCases {
+		var in input
+		if err := json.Unmarshal([]byte(rc.InputLine), &in); err != nil {
+			return nil, fmt.Errorf("case %q input: %w", rc.Name, err)
+		}
+		var out output
+		if err := json.Unmarshal([]byte(rc.OutputLine), &out); err != nil {
+			return nil, fmt.Errorf("case %q output: %w", rc.Name, err)
+		}
+
+		g := buildGraphFromDirected(in.Directed)
+
+		cases = append(cases, FindWellConnectedClustersCase{
+			Name:             rc.Name,
+			Graph:            g,
+			Subset:           in.Subset,
+			RefinedPartition: in.RefinedPartition,
+			Gamma:            in.Gamma,
+			Candidates:       out.Candidates,
+		})
+	}
+
+	return cases, nil
+}
+
+// -----------------------------------------------------------------------------
+// Test function
+// -----------------------------------------------------------------------------
+
+func TestFindWellConnectedClusters_FromFile(t *testing.T) {
+	
+	const path = "clustering_tests/FindWellConnectedClusters.txt"
+
+	cases, err := loadFindWellConnectedClustersCases(path)
+	if err != nil {
+		t.Fatalf("failed to load FindWellConnectedClusters cases: %v", err)
+	}
+
+	for i, tc := range cases {
+		tc := tc // capture
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			got := tc.Graph.FindWellConnectedClusters(tc.Subset, tc.RefinedPartition, tc.Gamma)
+			if !equalIntSlicesIgnoringOrder(got, tc.Candidates) {
+				t.Fatalf("candidates = %v, want %v", got, tc.Candidates)
+			}
+		})
+	}
 }
 
 //parser for SampleCommunity
@@ -2284,27 +2946,158 @@ func parseSampleCommunityRawCases(path string) ([]sampleCommunityRawCase, error)
 	return cases, nil
 }
 
+func TestSampleCommunity_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/sampleCommunity.txt"
+
+	cases, err := loadSampleCommunityCases(testFile)
+	if err != nil {
+		t.Fatalf("failed to parse %s: %v", testFile, err)
+	}
+	if len(cases) == 0 {
+		t.Fatalf("no test cases in %s", testFile)
+	}
+
+	// receiver g is unused inside SampleCommunity, so nil is fine
+	var g *Graph
+
+	for idx, tc := range cases {
+		tc := tc // capture range variable
+
+		name := fmt.Sprintf("%03d_%s", idx, tc.Name)
+
+		t.Run(name, func(t *testing.T) {
+			got := g.SampleCommunity(tc.Clusters, tc.Probs)
+			if got != tc.Selected {
+				t.Fatalf("SampleCommunity(%v, %v) = %d, want %d",
+					tc.Clusters, tc.Probs, got, tc.Selected)
+			}
+		})
+	}
+}
+
+
+
+
+//pareser and test function for SampleCommunity
+
+
+
+
 // parser for ComputeMoveProbabilities 
 
-// ComputeMoveProbabilityCase represents one fully parsed test case
-// for Graph.ComputeMoveProbability.
+
+type ComputeMoveProbabilityRawCase struct {
+	Name       string
+	InputLine  string
+	OutputLine string
+}
+
+func parseComputeMoveProbabilityRawCases(path string) ([]ComputeMoveProbabilityRawCase, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+
+	var (
+		cases                                  []ComputeMoveProbabilityRawCase
+		currentName                            string
+		inputLine, outputLine                  string
+		waitingForInput, waitingForOutput bool
+		lineNum                                int
+	)
+
+	flushCase := func() error {
+		if inputLine == "" && outputLine == "" {
+			return nil
+		}
+		if inputLine == "" || outputLine == "" {
+			return fmt.Errorf("incomplete case %q: missing input or output", currentName)
+		}
+		name := strings.TrimSpace(currentName)
+		if name == "" {
+			name = fmt.Sprintf("unnamed_%d", len(cases)+1)
+		}
+		cases = append(cases, ComputeMoveProbabilityRawCase{
+			Name:       name,
+			InputLine:  inputLine,
+			OutputLine: outputLine,
+		})
+		currentName = ""
+		inputLine, outputLine = "", ""
+		waitingForInput, waitingForOutput = false, false
+		return nil
+	}
+
+	for scanner.Scan() {
+		lineNum++
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		switch {
+		case strings.HasPrefix(line, "#"):
+			// New case header – flush previous case (if any).
+			if err := flushCase(); err != nil {
+				return nil, fmt.Errorf("line %d: %w", lineNum, err)
+			}
+			currentName = strings.TrimSpace(strings.TrimPrefix(line, "#"))
+			waitingForInput, waitingForOutput = true, false
+
+		case strings.HasPrefix(line, "@"):
+			// Comment line – next JSON is the output.
+			waitingForInput, waitingForOutput = false, true
+
+		default:
+			// JSON line.
+			if waitingForInput {
+				if inputLine != "" {
+					return nil, fmt.Errorf("line %d: multiple input JSON lines for case %q", lineNum, currentName)
+				}
+				inputLine = line
+			} else if waitingForOutput {
+				if outputLine != "" {
+					return nil, fmt.Errorf("line %d: multiple output JSON lines for case %q", lineNum, currentName)
+				}
+				outputLine = line
+			} else {
+				return nil, fmt.Errorf("line %d: unexpected JSON without header/@: %q", lineNum, line)
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan %s: %w", path, err)
+	}
+	if err := flushCase(); err != nil {
+		return nil, err
+	}
+
+	return cases, nil
+}
+
+// ---------- typed cases + loader ----------
+
+// ComputeMoveProbabilityCase is one fully parsed test case.
 type ComputeMoveProbabilityCase struct {
-	Name             string
-	CurrNode         int
+	Name              string
+	CurrNode          int
 	CandidateClusters []int
-	RefinedPartition []int
-	Theta            float64
-	Resolution       float64
-	Probs            map[int]float64
+	RefinedPartition  []int
+	Theta             float64
+	Resolution        float64
+	Probs             map[int]float64
 }
 
 // loadComputeMoveProbabilityCases reads a file with blocks:
 //
 //   # Case name
-//   {"currNode":...,"candidateClusters":[...],"refinedPartition":[...],
-//    "theta":...,"resolution":...}
+//   {"currNode":...,"candidateClusters":[...],"refinedPartition":[...],"theta":...,"resolution":...}
 //   @ some comment
-//   {"probs":{"clusterID":prob, ...}}
+//   {"probs":{"1":1.0,...}}
 //
 // and returns all parsed cases.
 func loadComputeMoveProbabilityCases(path string) ([]ComputeMoveProbabilityCase, error) {
@@ -2315,11 +3108,11 @@ func loadComputeMoveProbabilityCases(path string) ([]ComputeMoveProbabilityCase,
 
 	// JSON shapes for input/output.
 	type input struct {
-		CurrNode          int       `json:"currNode"`
-		CandidateClusters []int     `json:"candidateClusters"`
-		RefinedPartition  []int     `json:"refinedPartition"`
-		Theta             float64   `json:"theta"`
-		Resolution        float64   `json:"resolution"`
+		CurrNode          int     `json:"currNode"`
+		CandidateClusters []int   `json:"candidateClusters"`
+		RefinedPartition  []int   `json:"refinedPartition"`
+		Theta             float64 `json:"theta"`
+		Resolution        float64 `json:"resolution"`
 	}
 	type output struct {
 		Probs map[int]float64 `json:"probs"`
@@ -2329,12 +3122,11 @@ func loadComputeMoveProbabilityCases(path string) ([]ComputeMoveProbabilityCase,
 	for _, rc := range rawCases {
 		var in input
 		if err := json.Unmarshal([]byte(rc.InputLine), &in); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("case %q input: %w", rc.Name, err)
 		}
-
 		var out output
 		if err := json.Unmarshal([]byte(rc.OutputLine), &out); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("case %q output: %w", rc.Name, err)
 		}
 
 		cases = append(cases, ComputeMoveProbabilityCase{
@@ -2351,73 +3143,55 @@ func loadComputeMoveProbabilityCases(path string) ([]ComputeMoveProbabilityCase,
 	return cases, nil
 }
 
-// ---------- internal raw parser for "# / JSON / @ / JSON" ----------
+// ---------- test for Graph.ComputeMoveProbability ----------
 
-type computeMoveProbabilityRawCase struct {
-	Name       string
-	InputLine  string
-	OutputLine string
-}
+func TestComputeMoveProbability_FromFile(t *testing.T) {
+	const path = "clustering_tests/ComputeMoveProbability.txt"
 
-func parseComputeMoveProbabilityRawCases(path string) ([]computeMoveProbabilityRawCase, error) {
-	f, err := os.Open(path)
+	cases, err := loadComputeMoveProbabilityCases(path)
 	if err != nil {
-		return nil, err
+		t.Fatalf("failed to load test cases from %s: %v", path, err)
 	}
-	defer f.Close()
 
-	var (
-		cases            []computeMoveProbabilityRawCase
-		currentName      string
-		pendingInput     string
-		waitingForInput  bool
-		waitingForOutput bool
-	)
+	// TODO: if ModularityGain depends on graph structure, build an appropriate
+	// test graph here instead of using the zero value.
+	var g Graph
 
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
+	for i, tc := range cases {
+		tc := tc // capture
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			got := g.ComputeMoveProbability(
+				tc.CurrNode,
+				tc.CandidateClusters,
+				tc.RefinedPartition,
+				tc.Theta,
+				tc.Resolution,
+			)
 
-		switch {
-		case strings.HasPrefix(line, "#"):
-			// start a new case
-			currentName = strings.TrimSpace(strings.TrimPrefix(line, "#"))
-			pendingInput = ""
-			waitingForInput = true
-			waitingForOutput = false
-
-		case strings.HasPrefix(line, "@"):
-			// comment between input and output
-			waitingForOutput = true
-
-		default:
-			if waitingForInput {
-				// input JSON line
-				pendingInput = line
-				waitingForInput = false
-			} else if waitingForOutput {
-				// output JSON line → finalize case
-				cases = append(cases, computeMoveProbabilityRawCase{
-					Name:       currentName,
-					InputLine:  pendingInput,
-					OutputLine: line,
-				})
-				waitingForOutput = false
+			// Check same number of entries.
+			if len(got) != len(tc.Probs) {
+				t.Fatalf("len(got)=%d, want %d; got=%v, want=%v",
+					len(got), len(tc.Probs), got, tc.Probs)
 			}
-		}
-	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, err
+			// Compare each probability with a small tolerance.
+			const tol = 1e-9
+			for cid, want := range tc.Probs {
+				seen, ok := got[cid]
+				if !ok {
+					t.Fatalf("missing probability for cluster %d in got=%v", cid, got)
+				}
+				if !floatAlmostEqual(seen, want, tol) {
+					t.Fatalf("probs[%d]=%v, want %v (case %q)",
+						cid, seen, want, tc.Name)
+				}
+			}
+		})
 	}
-
-	return cases, nil
 }
+// test function for ComputeMoveProbability
 
-// parser for FindWellConnectedClusters
+
 
 
 // FindWellConnectedNodesCase is one fully parsed test case
@@ -2569,6 +3343,8 @@ func parseFindWellConnectedNodesRawCases(path string) ([]findWellConnectedNodesR
 	return cases, nil
 }
 
+
+
 // parser for EdgestoCluster 
 
 // EdgesToClusterCase is one fully parsed test case for Graph.EdgesToCluster.
@@ -2715,6 +3491,26 @@ func parseEdgesToClusterRawCases(path string) ([]edgesToClusterRawCase, error) {
 	return cases, nil
 }
 
+//test function for EdgestoCluster
+func TestFindWellConnectedNodes_FromFile(t *testing.T) {
+	const path = "clustering_tests/FindWellConnectedNodes.txt" // adjust if you use a subdir
+
+	cases, err := loadFindWellConnectedNodesCases(path)
+	if err != nil {
+		t.Fatalf("failed to load FindWellConnectedNodes cases: %v", err)
+	}
+
+	for i, tc := range cases {
+		tc := tc // capture
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			got := tc.Graph.FindWellConnectedNodes(tc.Subset, tc.Partition, tc.Gamma)
+			if !equalIntSlicesIgnoringOrder(got, tc.Connected) {
+				t.Fatalf("connected = %v, want %v", got, tc.Connected)
+			}
+		})
+	}
+}
+
 // parser for ClusterDegree
 
 
@@ -2859,6 +3655,30 @@ func parseClusterDegreeRawCases(path string) ([]clusterDegreeRawCase, error) {
 	return cases, nil
 }
 
+// ---------- test function for Graph.FindWellConnectedNodes ----------
+
+func TestClusterDegree_FromFile(t *testing.T) {
+	const path = "clustering_tests/ClusterDegree.txt" // adjust path if your file lives elsewhere
+
+	cases, err := loadClusterDegreeCases(path)
+	if err != nil {
+		t.Fatalf("failed to load ClusterDegree cases: %v", err)
+	}
+
+	for i, tc := range cases {
+		tc := tc // capture
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			got := tc.Graph.ClusterDegree(tc.Cluster)
+
+			// The expected values in ClusterDegree_tests.txt are simple (0, 3.5, 2.0, ...)
+			// so exact comparison is fine. If you prefer tolerance, replace with your floatEquals.
+			if got != tc.Degree {
+				t.Fatalf("ClusterDegree(%v) = %v, want %v", tc.Cluster, got, tc.Degree)
+			}
+		})
+	}
+}
+
 //parser for SingletonPartition
 
 
@@ -2980,6 +3800,28 @@ func parseSingletonRawCases(path string) ([]singletonRawCase, error) {
 	}
 
 	return cases, nil
+}
+
+//test function for Singleton
+
+func TestSingleton_FromFile(t *testing.T) {
+	const path = "clustering_tests/Singleton.txt" // adjust if you use a subdir
+
+	cases, err := loadSingletonCases(path)
+	if err != nil {
+		t.Fatalf("failed to load Singleton cases: %v", err)
+	}
+
+	for i, tc := range cases {
+		tc := tc // capture
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			got := Singleton(tc.Node, tc.Partition)
+			if got != tc.Singleton {
+				t.Fatalf("Singleton(%d, %v) = %v, want %v",
+					tc.Node, tc.Partition, got, tc.Singleton)
+			}
+		})
+	}
 }
 
 //parser for MoveNodes
@@ -3127,6 +3969,44 @@ func parseMoveNodesRawCases(path string) ([]moveNodesRawCase, error) {
 
 	return cases, nil
 }
+
+func TestMoveNodes_FromFile(t *testing.T) {
+	const path = "clustering_tests/MoveNodes.txt"
+
+	cases, err := loadMoveNodesCases(path)
+	if err != nil {
+		t.Fatalf("failed to load MoveNodes cases: %v", err)
+	}
+
+	for i, tc := range cases {
+		tc := tc // capture
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			// copy so we don't mutate the test case struct's slice
+			start := append([]int(nil), tc.Partition...)
+
+			got := tc.Graph.MoveNodes(start, tc.Resolution)
+
+			if !equalIntSlices(got, tc.Partition) {
+				t.Fatalf("MoveNodes(%v, %.4f) = %v, want %v",
+					tc.Partition, tc.Resolution, got, tc.Partition)
+			}
+		})
+	}
+}
+
+// equalIntSlices checks equality with order (unlike the ignoring-order helper).
+func equalIntSlices(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 
 //parser for FindBestClustering
 
@@ -3286,6 +4166,37 @@ func parseFindBestClusterRawCases(path string) ([]findBestClusterRawCase, error)
 	return cases, nil
 }
 
+func TestFindBestCluster_FromFile(t *testing.T) {
+	const path = "clustering_tests/FindBestCluster.txt" // adjust if it's in a subdir
+
+	cases, err := loadFindBestClusterCases(path)
+	if err != nil {
+		t.Fatalf("failed to load FindBestCluster cases: %v", err)
+	}
+
+	for i, tc := range cases {
+		tc := tc // capture range variable
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			gotCluster, gotImproved := FindBestCluster(
+				tc.Node,
+				tc.Graph,
+				tc.CandidateClusters,
+				tc.Partition,
+				tc.Resolution,
+			)
+
+			if gotCluster != tc.BestCluster || gotImproved != tc.Improved {
+				t.Fatalf(
+					"FindBestCluster(node=%d, cand=%v, part=%v, res=%.4f) = (%d, %v); want (%d, %v)",
+					tc.Node, tc.CandidateClusters, tc.Partition, tc.Resolution,
+					gotCluster, gotImproved,
+					tc.BestCluster, tc.Improved,
+				)
+			}
+		})
+	}
+}
+
 //parser for RandomNodeOrder
 
 // RandomNodeOrderCase represents one test case for RandomNodeOrder.
@@ -3406,6 +4317,62 @@ func parseRandomNodeOrderRawCases(path string) ([]randomNodeOrderRawCase, error)
 	}
 
 	return cases, nil
+}
+
+func TestRandomNodeOrder_FromFile(t *testing.T) {
+	const path = "clustering_tests/RandomNodeOrder.txt"
+
+	cases, err := loadRandomNodeOrderCases(path)
+	if err != nil {
+		t.Fatalf("failed to load RandomNodeOrder cases: %v", err)
+	}
+
+	for i, tc := range cases {
+		tc := tc // capture
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			// Use the provided seed so tests are reproducible.
+			rand.Seed(tc.Seed)
+
+			got := RandomNodeOrder(tc.N)
+
+			// 1) Check length.
+			if len(got) != tc.ExpectedLen {
+				t.Fatalf("len(RandomNodeOrder(%d)) = %d, want %d",
+					tc.N, len(got), tc.ExpectedLen)
+			}
+
+			// 2) For n > 0, ensure it's a permutation of [0..n-1].
+			if tc.N > 0 {
+				if !isPermutation0toNminus1(got, tc.N) {
+					t.Fatalf("RandomNodeOrder(%d) = %v is not a permutation of [0..%d]",
+						tc.N, got, tc.N-1)
+				}
+			}
+		})
+	}
+}
+
+// isPermutation0toNminus1 checks that s is a permutation of [0,1,...,n-1].
+func isPermutation0toNminus1(s []int, n int) bool {
+	if len(s) != n {
+		return false
+	}
+	seen := make([]bool, n)
+	for _, v := range s {
+		if v < 0 || v >= n {
+			return false
+		}
+		if seen[v] {
+			return false
+		}
+		seen[v] = true
+	}
+	for _, ok := range seen {
+		if !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // parser for FindCandidateClusters
@@ -3541,6 +4508,31 @@ func parseFindCandidateClustersRawCases(path string) ([]findCandidateClustersRaw
 
 	return cases, nil
 }
+
+func TestFindCandidateClusters_FromFile(t *testing.T) {
+	const path = "clustering_tests/FindCandidateCluster.txt" // adjust if you use a subdir
+
+	cases, err := loadFindCandidateClustersCases(path)
+	if err != nil {
+		t.Fatalf("failed to load FindCandidateClusters cases: %v", err)
+	}
+
+	for i, tc := range cases {
+		tc := tc // capture range variable
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			got := FindCandidateClusters(tc.Node, tc.Edges, tc.Partition)
+
+			// order & duplicates matter (see your Case 5), so we use exact slice equality
+			if !equalIntSlices(got, tc.Candidates) {
+				t.Fatalf("FindCandidateClusters(node=%d, edges=%v, partition=%v) = %v, want %v",
+					tc.Node, tc.Edges, tc.Partition, got, tc.Candidates)
+			}
+		})
+	}
+}
+
+
+
 
 //parser for ModularityGain
 
@@ -3680,6 +4672,32 @@ func parseModularityGainRawCases(path string) ([]modularityGainRawCase, error) {
 	}
 
 	return cases, nil
+}
+
+func TestModularityGain_FromFile(t *testing.T) {
+	const path = "clustering_tests/ModularityGain.txt" // adjust if the file is in a subdir
+
+	cases, err := loadModularityGainCases(path)
+	if err != nil {
+		t.Fatalf("failed to load ModularityGain cases: %v", err)
+	}
+
+	const eps = 1e-9 // or reuse a global epsilon if you already have one
+
+	for i, tc := range cases {
+		tc := tc // capture range variable
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			got := tc.Graph.ModularityGain(tc.I, tc.Cluster, tc.Partition, tc.Resolution)
+
+			if !floatEquals(got, tc.DeltaQ, eps) {
+				t.Fatalf(
+					"ModularityGain(i=%d, cluster=%d, partition=%v, resolution=%.4f) = %v, want %v",
+					tc.I, tc.Cluster, tc.Partition, tc.Resolution,
+					got, tc.DeltaQ,
+				)
+			}
+		})
+	}
 }
 
 // parser for Aggregate
@@ -3845,6 +4863,73 @@ func parseAggregateRawCases(path string) ([]aggregateRawCase, error) {
 	return cases, nil
 }
 
+func TestAggregate_FromFile(t *testing.T) {
+	const path = "clustering_tests/Aggregate.txt" // adjust if your file is in a subdir
+
+	cases, err := loadAggregateCases(path)
+	if err != nil {
+		t.Fatalf("failed to load Aggregate cases: %v", err)
+	}
+
+	const eps = 1e-9 // or use your global epsilon if you already have one
+
+	for i, tc := range cases {
+		tc := tc // capture range variable
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			got := tc.OriginalGraph.Aggregate(tc.Partition)
+
+			if !graphsEqual(got, tc.ExpectedGraph, eps) {
+				t.Fatalf("Aggregate(%v) = %#v, want %#v",
+					tc.Partition, got, tc.ExpectedGraph)
+			}
+		})
+	}
+}
+
+// graphsEqual compares two *Graph values (nodes, totalWeight, and edges).
+func graphsEqual(a, b *Graph, eps float64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Nodes != b.Nodes {
+		return false
+	}
+	if !floatEquals(a.TotalWeight, b.TotalWeight, eps) {
+		return false
+	}
+	if len(a.Edges) != len(b.Edges) {
+		return false
+	}
+
+	for from, expEdges := range b.Edges {
+		gotEdges, ok := a.Edges[from]
+		if !ok {
+			return false
+		}
+		if !edgeSlicesEqual(gotEdges, expEdges, eps) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// edgeSlicesEqual compares two []Edge slices with order and weight tolerance.
+func edgeSlicesEqual(a, b []Edge, eps float64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].To != b[i].To {
+			return false
+		}
+		if !floatEquals(a[i].Weight, b[i].Weight, eps) {
+			return false
+		}
+	}
+	return true
+}
+
 // parser for Copy
 
 
@@ -3963,6 +5048,45 @@ func parseCopyRawCases(path string) ([]copyRawCase, error) {
 
 	return cases, nil
 }
+
+func TestCopy_FromFile(t *testing.T) {
+	const path = "clustering_tests/Copy.txt" // adjust if the file is in a subdir
+
+	cases, err := loadCopyCases(path)
+	if err != nil {
+		t.Fatalf("failed to load Copy cases: %v", err)
+	}
+
+	for i, tc := range cases {
+		tc := tc // capture range variable
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			// keep a separate copy of the input to test aliasing later
+			orig := append([]int(nil), tc.InputPartition...)
+
+			got := Copy(tc.InputPartition)
+
+			// 1) Check values are correct.
+			if !equalIntSlices(got, tc.OutputPartition) {
+				t.Fatalf("Copy(%v) = %v, want %v",
+					tc.InputPartition, got, tc.OutputPartition)
+			}
+
+			// 2) Check deep copy: modifying got should NOT change tc.InputPartition.
+			if len(got) > 0 {
+				got[0]++
+				if len(tc.InputPartition) > 0 && got[0] == tc.InputPartition[0] {
+					t.Fatalf("Copy returned a slice sharing backing array with input; mutating result changed input")
+				}
+				// also ensure we didn't accidentally mutate our saved original
+				if len(orig) > 0 && tc.InputPartition[0] != orig[0] {
+					t.Fatalf("test mutated the original input slice unexpectedly")
+				}
+			}
+		})
+	}
+}
+
+
 
 //parser for Compare
 
@@ -4083,4 +5207,24 @@ func parseCompareRawCases(path string) ([]compareRawCase, error) {
 	}
 
 	return cases, nil
+}
+
+func TestCompare_FromFile(t *testing.T) {
+	const path = "clustering_tests/Compare.txt" // adjust if it's in a subdir
+
+	cases, err := loadCompareCases(path)
+	if err != nil {
+		t.Fatalf("failed to load Compare cases: %v", err)
+	}
+
+	for i, tc := range cases {
+		tc := tc // capture range variable
+		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+			got := Compare(tc.A, tc.B)
+			if got != tc.Equal {
+				t.Fatalf("Compare(%v, %v) = %v, want %v",
+					tc.A, tc.B, got, tc.Equal)
+			}
+		})
+	}
 }
