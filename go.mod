@@ -1,4 +1,4 @@
-module umemiya.me/cmu/02601/scango
+module umemiya.me/cmu/02601/scrna_project
 
 go 1.25.0
 
