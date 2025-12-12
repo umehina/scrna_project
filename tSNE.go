@@ -1,8 +1,7 @@
-// tSNE.go
-// Amy Ji - 12/04/2025
+// functions.go
 
 package main
-/*
+
 import (
 	"fmt"
 	//"gonum.org/v1/gonum/floats"
@@ -10,24 +9,22 @@ import (
 	"gonum.org/v1/gonum/mat"
 	//"gonum.org/v1/gonum/stat"
 )
+
 type TSNEResult struct {
 	scores *mat.Dense
 }
 
-// Run t-SNE on any dense matrix X and (optionally) plot it.
-func runTSNEOnDense(X *mat.Dense, cfg PipelineConfig) error {
-    if X == nil {
-        return fmt.Errorf("runTSNEOnDense: input matrix is nil")
-    }
+func (p *PCAResult) TSNE(dimsOut int, perplexity, learningRate float64, maxIter int)*TSNEResult{
+	if p == nil || p.scores == nil {
+		fmt.Errorf("TSNE: PCAResult or score is nil")
+	}
 
-    fmt.Println("Running t-SNE...")
-    t := tsne.NewTSNE(cfg.TSNEDims, cfg.TSNEPerplexity, cfg.TSNETheta, cfg.TSNEIter, false)
-    Y := t.EmbedData(X, nil).(*mat.Dense)
+	// Create a new t-SNE object
+	t := tsne.NewTSNE(dimsOut, perplexity, learningRate,maxIter,false)
+	Y := t.EmbedData(p.scores,nil).(*mat.Dense)
 
-    if err := PlotEmb(Y, cfg.TSNEPlot, "tsne", "tsne_1", "tsne_2"); err != nil {
-        return fmt.Errorf("runTSNEOnDense: PlotEmb failed: %w", err)
-    }
-    fmt.Println("t-SNE plot saved as", cfg.TSNEPlot)
-    return nil
+	return &TSNEResult{
+		scores: Y, //Y is a mat.Dense object
+	}
+
 }
-*/

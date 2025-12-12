@@ -59,6 +59,6 @@ getwd()
 
 # Now call it:
 plot_umap_with_clusters(
-  umap_csv   = "../output/umap.csv",
-  labels_csv = "../output/leiden_export_labels.csv"
+  umap_csv   = "output/umap.csv",
+  labels_csv = "output/leiden_export_labels.csv"
 )
