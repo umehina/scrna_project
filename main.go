@@ -2,14 +2,15 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"log"
-	"os"
-	"path/filepath"
+    "flag"
+    "fmt"
+    "log"
+    "os"
+    "path/filepath"
 
-	"gonum.org/v1/gonum/mat"
+    "gonum.org/v1/gonum/mat"
 )
+
 
 
 // main now takes CLI flags so R Shiny can control the pipeline:
@@ -20,91 +21,149 @@ import (
 //
 // seperate the original main function into subfunctions.
 
+// seperate the original main function into subfunctions.
 func main() {
-	// -----------------------------------------------------------------
-	// CLI flags so R Shiny can control the pipeline
-	// -----------------------------------------------------------------
-	normMethod := flag.String("norm", "pearson",
-		"Normalization method: 'pearson' or 'lognorm'")
-	nPCs := flag.Int("npcs", 30,
-		"Number of principal components (2–50)")
-	embedMethod := flag.String("embed", "umap",
-		"Embedding method: 'umap' or 'tsne'")
-	dataPath := flag.String("data", "data/scRNA_dataset.csv",
-		"Path to input count matrix CSV (relative to project root)")
+    // ---------------- CLI flags ----------------
 
-	flag.Parse()
+    dataPath := flag.String("data", "data/scRNA_dataset.csv",
+        "Path to input count matrix CSV")
+    normMethod := flag.String("norm", "pearson",
+        "Normalization method: 'pearson' or 'lognorm'")
+    nPCs := flag.Int("npcs", 30,
+        "Number of principal components (2–50)")
+    embedMethod := flag.String("embed", "umap",
+        "Embedding method: 'umap' or 'tsne'")
 
-	// clamp PCs
-	if *nPCs < 2 {
-		*nPCs = 2
-	}
-	if *nPCs > 50 {
-		*nPCs = 50
-	}
+    // Leiden parameters
+    kFlag := flag.Int("k", 25,
+        "Leiden k (neighbors in KNN graph, 5–100)")
+    resolutionFlag := flag.Float64("resolution", 0.5,
+        "Leiden resolution parameter (0.1–2.0)")
 
-	fmt.Printf("Running pipeline with norm=%s, nPCs=%d, embed=%s\n",
-		*normMethod, *nPCs, *embedMethod)
-	fmt.Println("Loading dataset from:", *dataPath)
+    // UMAP parameters (only nNeighbors & LR are user-adjustable)
+    umapNeighborsFlag := flag.Int("umap_neighbors", 30,
+        "UMAP n_neighbors (5–100)")
+    umapLRFlag := flag.Float64("umap_lr", 0.1,
+        "UMAP learning rate (0.01–1.0)")
 
-	// -----------------------------------------------------------------
-	// 1) Load + QC filter dataset
-	// -----------------------------------------------------------------
-	_, filtered := loadAndFilterDataset(*dataPath)
+    // t-SNE parameters
+    tsnePerpFlag := flag.Float64("tsne_perp", 30.0,
+        "t-SNE perplexity (5–100)")
+    tsneLRFlag := flag.Float64("tsne_lr", 200.0,
+        "t-SNE learning rate (10–1000)")
+    tsneIterFlag := flag.Int("tsne_iter", 1000,
+        "t-SNE iterations (250–5000)")
 
-	// -----------------------------------------------------------------
-	// 2) Build, normalize, scale expression matrix
-	// -----------------------------------------------------------------
-	// ASSUMPTION: you already have a function like
-	//   buildAndPreprocessMatrix(filtered *CountMatrix, normMethod string) *ExpressionMatrix
-	// If yours currently has a different signature (e.g., no normMethod),
-	// you can either:
-	//   - add the normMethod parameter to that function, OR
-	//   - ignore this argument and keep internal logic as-is for now.
-	em := buildAndPreprocessMatrix(filtered, *normMethod)
+    flag.Parse()
 
-	// -----------------------------------------------------------------
-	// 3) Run PCA and save PCA plot
-	// -----------------------------------------------------------------
-	// ASSUMPTION: you have something like
-	//   runPCAAndPlot(em *ExpressionMatrix, outPath string, pcX, pcY, nPCs int) *PCAResult
-	pcaPlotPath := filepath.Join("output", "pca.png")
-	pcResult := runPCAAndPlot(em, pcaPlotPath, 0, 1, *nPCs)
 
-	// -----------------------------------------------------------------
-	// 4) Run Leiden clustering and export CSVs into ./output
-	// -----------------------------------------------------------------
-	// You can keep your original k / resolution / gamma / theta here
-	k := 20       // example default
-	maxIter := 10 // example default
-	resolution := 1.0
-	gamma := 1.0
-	theta := 0.01
+    // ---------------- Clamp ranges ----------------
 
-	runLeidenandExport(pcResult.scores, k, maxIter, resolution, gamma, theta)
+    if *nPCs < 2 {
+        *nPCs = 2
+    }
+    if *nPCs > 50 {
+        *nPCs = 50
+    }
 
-	// -----------------------------------------------------------------
-	// 5) Embedding: UMAP or t-SNE
-	// -----------------------------------------------------------------
-	switch *embedMethod {
-	case "tsne":
-		// t-SNE pipeline writes ./output/tsne.csv
-		if err := runTSNEPipeline(pcResult, filepath.Join("output", "tsne.csv")); err != nil {
-			log.Fatalf("t-SNE pipeline failed: %v", err)
-		}
-		fmt.Println("t-SNE pipeline finished successfully.")
-	default: // "umap"
-		// UMAP pipeline (already defined in your main.go)
-		// ASSUMPTION: you have:
-		//   func runUMAPPipeline(coordPath, outPath string) error
-		coordPath := filepath.Join("output", "leiden_export_coords.csv")
-		umapPath := filepath.Join("output", "umap.csv")
-		if err := runUMAPPipeline(coordPath, umapPath); err != nil {
-			log.Fatalf("UMAP pipeline failed: %v", err)
-		}
-		fmt.Println("UMAP pipeline finished successfully.")
-	}
+    if *kFlag < 5 {
+        *kFlag = 5
+    }
+    if *kFlag > 100 {
+        *kFlag = 100
+    }
+
+    if *resolutionFlag < 0.1 {
+        *resolutionFlag = 0.1
+    }
+    if *resolutionFlag > 2.0 {
+        *resolutionFlag = 2.0
+    }
+
+    if *umapNeighborsFlag < 5 {
+        *umapNeighborsFlag = 5
+    }
+    if *umapNeighborsFlag > 100 {
+        *umapNeighborsFlag = 100
+    }
+
+    if *umapLRFlag < 0.01 {
+        *umapLRFlag = 0.01
+    }
+    if *umapLRFlag > 1.0 {
+        *umapLRFlag = 1.0
+    }
+
+    if *tsnePerpFlag < 5 {
+        *tsnePerpFlag = 5
+    }
+    if *tsnePerpFlag > 100 {
+        *tsnePerpFlag = 100
+    }
+
+    if *tsneLRFlag < 10 {
+        *tsneLRFlag = 10
+    }
+    if *tsneLRFlag > 1000 {
+        *tsneLRFlag = 1000
+    }
+
+    if *tsneIterFlag < 250 {
+        *tsneIterFlag = 250
+    }
+    if *tsneIterFlag > 5000 {
+        *tsneIterFlag = 5000
+    }
+
+    fmt.Printf("Running pipeline\n  data=%s\n  norm=%s\n  nPCs=%d\n  embed=%s\n",
+        *dataPath, *normMethod, *nPCs, *embedMethod)
+    fmt.Printf("  Leiden: k=%d, resolution=%.3f\n", *kFlag, *resolutionFlag)
+    fmt.Printf("  UMAP: n_neighbors=%d, lr=%.3f\n", *umapNeighborsFlag, *umapLRFlag)
+    fmt.Printf("  t-SNE: perp=%.1f, lr=%.1f, iter=%d\n",
+        *tsnePerpFlag, *tsneLRFlag, *tsneIterFlag)
+
+    // Ensure output dir exists
+    if err := os.MkdirAll("output", 0o755); err != nil {
+        log.Fatalf("failed to create output directory: %v", err)
+    }
+
+    // 1) Load + QC filter dataset (USE the -data flag here)
+    _, filtered := loadAndFilterDataset(*dataPath)
+
+    // 2) Build, normalize, scale expression matrix
+    em := buildAndPreprocessMatrix(filtered, *normMethod)
+
+    // 3) PCA
+    pcaPlotPath := filepath.Join("output", "pca.png")
+    pcResult := runPCAAndPlot(em, pcaPlotPath, 0, 1, *nPCs)
+
+    // 4) Leiden clustering and export CSVs
+    k := *kFlag
+    maxIter := 10 // keep this fixed for now
+    resolution := *resolutionFlag
+    gamma := 1.0
+    theta := 0.01
+
+    runLeidenandExport(pcResult.scores, k, maxIter, resolution, gamma, theta)
+
+    // 5) Embedding
+    switch *embedMethod {
+    case "tsne":
+        tsnePath := filepath.Join("output", "tsne.csv")
+        if err := runTSNEWithParams(pcResult, tsnePath, *tsnePerpFlag, *tsneLRFlag, *tsneIterFlag); err != nil {
+            log.Fatalf("t-SNE pipeline failed: %v", err)
+        }
+        fmt.Println("t-SNE pipeline finished successfully.")
+    default: // "umap"
+        umapPath := filepath.Join("output", "umap.csv")
+        if err := runUMAPOnPCAWithParams(pcResult, umapPath, *umapNeighborsFlag, *umapLRFlag); err != nil {
+            log.Fatalf("UMAP pipeline failed: %v", err)
+        }
+        fmt.Println("UMAP pipeline finished successfully.")
+    }
 }
+
+
 
 
 // ---------------- Data loading & QC ----------------
@@ -203,7 +262,7 @@ func runUMAPPipeline(coordPath, outPath string) error {
 	fmt.Printf("NodeID range: %d..%d\n", nodeIDs[0], nodeIDs[len(nodeIDs)-1])
 
 	// 2. UMAP hyperparameters (tune here for now)
-	nNeighbors := 30
+	nNeighbors := 50
 	nComponents := 2
 	nEpochs := 1000
 	learningRate := 0.1
@@ -249,7 +308,7 @@ func runTSNEPipeline(pcs *PCAResult, outPath string) error {
 
 	fmt.Println("Running t-SNE...")
 	// dimsOut, perplexity, learning rate, maxIter
-	tsneRes := pcs.TSNE(2, 30.0, 200.0, 1000)
+	tsneRes := pcs.TSNE(2, 30.0, 20, 1000)
 	if tsneRes == nil || tsneRes.scores == nil {
 		return fmt.Errorf("t-SNE pipeline: TSNE result is nil")
 	}
@@ -276,4 +335,117 @@ func runTSNEPipeline(pcs *PCAResult, outPath string) error {
 	}
 	fmt.Printf("t-SNE embedding written to %s\n", outPath)
 	return nil
+}
+// runUMAPOnPCAWithParams runs UMAP on the PCA scores with user-provided
+// nNeighbors and learningRate. Other UMAP parameters are kept fixed here.
+func runUMAPOnPCAWithParams(pcs *PCAResult, outPath string, nNeighbors int, learningRate float64) error {
+    if pcs == nil || pcs.scores == nil {
+        return fmt.Errorf("UMAP pipeline: PCA result is nil")
+    }
+
+    rows, cols := pcs.scores.Dims()
+    if rows == 0 || cols == 0 {
+        return fmt.Errorf("UMAP pipeline: empty PCA scores")
+    }
+
+    // Convert PCA scores to [][]float64
+    data := make([][]float64, rows)
+    for i := 0; i < rows; i++ {
+        row := pcs.scores.RawRowView(i)
+        data[i] = make([]float64, cols)
+        copy(data[i], row)
+    }
+
+    fmt.Printf("Running UMAP on PCA scores (%d cells x %d PCs) with n_neighbors=%d, lr=%.3f...\n",
+        rows, cols, nNeighbors, learningRate)
+
+    nComponents := 2
+    nEpochs := 1000
+    negativeSamples := 10
+    minDist := 0.1
+
+    embedding := UMAP(
+        data,
+        nNeighbors,
+        nComponents,
+        nEpochs,
+        learningRate,
+        negativeSamples,
+        minDist,
+    )
+
+    if len(embedding) != rows {
+        return fmt.Errorf("UMAP embedding length mismatch: got %d, want %d", len(embedding), rows)
+    }
+    if len(embedding[0]) < 2 {
+        return fmt.Errorf("UMAP embedding has less than 2 dimensions")
+    }
+
+    // Node IDs: 1-based indexing
+    nodeIDs := make([]int, rows)
+    for i := range nodeIDs {
+        nodeIDs[i] = i + 1
+    }
+
+    if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+        return fmt.Errorf("UMAP: failed to create output directory: %w", err)
+    }
+
+    // Assumes you already have: writeEmbeddingCSV(path string, nodeIDs []int, embedding [][]float64) error
+    if err := writeEmbeddingCSV(outPath, nodeIDs, embedding); err != nil {
+        return fmt.Errorf("UMAP: failed to write csv: %w", err)
+    }
+    fmt.Printf("UMAP embedding written to %s\n", outPath)
+    return nil
+}
+
+// runTSNEWithParams runs t-SNE on PCA scores with user-provided perplexity,
+// learning rate, and iterations.
+func runTSNEWithParams(pcs *PCAResult, outPath string, perp, lr float64, iterations int) error {
+    if pcs == nil || pcs.scores == nil {
+        return fmt.Errorf("t-SNE pipeline: PCA result is nil")
+    }
+
+    rows, cols := pcs.scores.Dims()
+    if rows == 0 || cols == 0 {
+        return fmt.Errorf("t-SNE pipeline: empty PCA scores")
+    }
+
+    fmt.Printf("Running t-SNE on PCA scores (%d cells x %d PCs) with perp=%.1f, lr=%.1f, iter=%d...\n",
+        rows, cols, perp, lr, iterations)
+
+    // Assumes you have: func (p *PCAResult) TSNE(dimsOut int, perp, lr float64, maxIter int) *TSNEResult
+    tsneRes := pcs.TSNE(2, perp, lr, iterations)
+    if tsneRes == nil || tsneRes.scores == nil {
+        return fmt.Errorf("t-SNE pipeline: TSNE result is nil")
+    }
+
+    r2, c2 := tsneRes.scores.Dims()
+    if r2 != rows {
+        return fmt.Errorf("t-SNE embedding length mismatch: got %d, want %d", r2, rows)
+    }
+    if c2 < 2 {
+        return fmt.Errorf("t-SNE embedding has less than 2 dimensions: %d", c2)
+    }
+
+    embedding := make([][]float64, rows)
+    for i := 0; i < rows; i++ {
+        row := tsneRes.scores.RawRowView(i)
+        embedding[i] = []float64{row[0], row[1]}
+    }
+
+    nodeIDs := make([]int, rows)
+    for i := range nodeIDs {
+        nodeIDs[i] = i + 1
+    }
+
+    if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+        return fmt.Errorf("t-SNE: failed to create output directory: %w", err)
+    }
+
+    if err := writeEmbeddingCSV(outPath, nodeIDs, embedding); err != nil {
+        return fmt.Errorf("t-SNE: failed to write csv: %w", err)
+    }
+    fmt.Printf("t-SNE embedding written to %s\n", outPath)
+    return nil
 }

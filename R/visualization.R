@@ -40,8 +40,8 @@ plot_umap_with_clusters <- function(umap_csv, labels_csv) {
     theme_minimal(base_size = 14) +
     labs(
       title = "UMAP Embedding with Leiden Clusters",
-      x = "UMAP 1",
-      y = "UMAP 2",
+      x = "PC1",
+      y = "PC2",
       color = "Cluster"
     )
   

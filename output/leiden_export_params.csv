@@ -1,6 +1,6 @@
 parameter,value
-k,20
+k,25
 maxIter,10
-resolution,1
+resolution,0.5
 gamma,1
 theta,0.01
