@@ -1,0 +1,6 @@
+parameter,value
+k,20
+maxIter,10
+resolution,1
+gamma,1
+theta,0.01
