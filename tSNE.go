@@ -1,7 +1,8 @@
 // tSNE.go
 // Amy Ji - 12/04/2025
-package main
 
+package main
+/*
 import (
 	"fmt"
 	//"gonum.org/v1/gonum/floats"
@@ -29,3 +30,4 @@ func runTSNEOnDense(X *mat.Dense, cfg PipelineConfig) error {
     fmt.Println("t-SNE plot saved as", cfg.TSNEPlot)
     return nil
 }
+*/

@@ -71,20 +71,20 @@ func buildAndPreprocessMatrix(filtered *CountMatrix) *ExpressionMatrix {
 
 	// Normalization
 	fmt.Print("Normalizing (Pearson)...")
-	em.Pearson(filtered, 100)
+	em.Pearson(100)
 	fmt.Println(" done.")
 
 	// Scaling
 	fmt.Print("Scaling data...")
 	em.ScaleData(10)
-	// fmt.Println(" done.")
+	fmt.Println(" done.")
 
 	return &em
 }
 
 func runPCAAndPlot(em *ExpressionMatrix, outPath string, pcX, pcY int) *PCAResult {
 	fmt.Print("Running PCA...")
-	pcs := normalized.PCA(50)
+	pcs := em.PCA(30)
 	fmt.Println(" done.")
 
 	fmt.Println("PC variances:", pcs.variances)
@@ -114,12 +114,12 @@ func runUMAPPipeline(coordPath, outPath string) error {
 	fmt.Printf("NodeID range: %d..%d\n", nodeIDs[0], nodeIDs[len(nodeIDs)-1])
 
 	// 2. UMAP hyperparameters (tune here for now)
-	nNeighbors := 15
+	nNeighbors := 30
 	nComponents := 2
 	nEpochs := 1000
 	learningRate := 0.1
 	negativeSamples := 10
-	minDist := 0.02
+	minDist := 0.1
 	// Note: if fuzzy edges mean is not within 0.2–0.6, parameters may not be ideal.
 
 	fmt.Println("Running UMAP...")

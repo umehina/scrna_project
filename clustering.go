@@ -59,8 +59,8 @@ func RunLeiden(data *mat.Dense, k, maxIter int, resolution, gamma, theta float64
 // Vania Halim - 12/4/2025
 func ExportLeiden(g *Graph, clusters []int, pcaCoords *mat.Dense, k, maxIter int, resolution, gamma, theta float64) {
 
-	// ensure R directory exists and save files there for R plotting
-	dir := "R"
+	// ensure output directory exists
+	dir := "output"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}
