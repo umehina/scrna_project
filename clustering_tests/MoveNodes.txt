@@ -1,0 +1,19 @@
+# Case 1: empty graph, empty partition
+{"nodes":0,"edges":{},"totalWeight":0,"partition":[],"resolution":1.0}
+@ no nodes → partition stays empty
+{"partition":[]}
+
+# Case 2: single node, no edges
+{"nodes":1,"edges":{"0":[]},"totalWeight":0,"partition":[0],"resolution":1.0}
+@ one node with no neighbors; there is nowhere to move → partition should remain [0]
+{"partition":[0]}
+
+# Case 3: two nodes, no edges
+{"nodes":2,"edges":{"0":[],"1":[]},"totalWeight":0,"partition":[0,1],"resolution":1.0}
+@ isolated nodes, no neighbors → candidateClusters is empty for both; partition unchanged
+{"partition":[0,1]}
+
+# Case 4: three nodes all in same community, no edges
+{"nodes":3,"edges":{"0":[],"1":[],"2":[]},"totalWeight":0,"partition":[0,0,0],"resolution":1.0}
+@ no edges at all; moving nodes cannot improve modularity → partition remains [0,0,0]
+{"partition":[0,0,0]}

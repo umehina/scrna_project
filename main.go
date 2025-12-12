@@ -77,14 +77,14 @@ func buildAndPreprocessMatrix(filtered *CountMatrix) *ExpressionMatrix {
 	// Scaling
 	fmt.Print("Scaling data...")
 	em.ScaleData(10)
-	fmt.Println(" done.")
+	// fmt.Println(" done.")
 
 	return &em
 }
 
 func runPCAAndPlot(em *ExpressionMatrix, outPath string, pcX, pcY int) *PCAResult {
 	fmt.Print("Running PCA...")
-	pcs := em.PCA(30)
+	pcs := normalized.PCA(50)
 	fmt.Println(" done.")
 
 	fmt.Println("PC variances:", pcs.variances)

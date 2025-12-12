@@ -319,7 +319,6 @@ func computeRhoSigma(knnDist [][]float64, k int) (rho []float64, sigma []float64
 
 // buildDirectedProbs computes directed probabilities p_{j|i} for each edge (i → j).
 // It returns a sparse map keyed by (i,j).
-//
 // Amy Ji - 12/06/2025
 func buildDirectedProbs(knnIdx [][]int, knnDist [][]float64, rho, sigma []float64) map[pair]float64 {
 	n := len(knnIdx)

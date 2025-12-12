@@ -1,0 +1,19 @@
+# Case 1: single cluster, prob=1
+{"clusters":[0],"probs":{"0":1.0}}
+@ only one cluster with positive probability → always pick 0
+{"selected":0}
+
+# Case 2: multiple clusters, only one with non-zero probability
+{"clusters":[1,2,3],"probs":{"1":0.0,"2":5.0,"3":0.0}}
+@ total probability = 5; the only positive mass is on cluster 2 → always pick 2
+{"selected":2}
+
+# Case 3: multiple clusters, probabilities defined only for one cluster
+{"clusters":[10,20,30],"probs":{"20":3.5}}
+@ probs for 10 and 30 default to 0; only cluster 20 has positive probability → always pick 20
+{"selected":20}
+
+# Case 4: all zero probabilities
+{"clusters":[4,5,6],"probs":{"4":0.0,"5":0.0,"6":0.0}}
+@ total = 0 → r = 0, cumulative stays 0; first cluster (4) is returned
+{"selected":4}

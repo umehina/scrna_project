@@ -12,7 +12,7 @@ import (
 
 // PCAResult stores the results of pca: cell embeddings (scores), gene loadings, variance explained per pc, and total variance.
 type PCAResult struct {
-	scores    *mat.Dense //convert into csv file
+	scores    *mat.Dense
 	loadings  *mat.Dense
 	variances []float64
 	totalvar  float64
@@ -36,7 +36,7 @@ func (em *ExpressionMatrix) ToDense() *mat.Dense {
 		flat = append(flat, em.data[i]...)
 	}
 
-	return mat.NewDense(n, d, flat) //stored as a 1D slice,with row, col info.
+	return mat.NewDense(n, d, flat)
 }
 
 // PCACompute runs pca on a centered n×d matrix by computing eigenvectors/eigenvalues and projecting data onto the top k components.
@@ -59,14 +59,15 @@ func PCACompute(data *mat.Dense, k int) *PCAResult {
 	}
 
 	// loadings is d x d; each column is a principal component (gene weights)
-	var loadings mat.Dense 
+	var loadings mat.Dense
 	pc.VectorsTo(&loadings)
-	// take only the first k eigenvectors (loadings)
-	loadk := loadings.Slice(0, d, 0, k).(*mat.Dense)
 
 	// eigenvalues (length d), sorted largest smallest
 	variances := pc.VarsTo(nil)
 	variancesk := variances[:k]
+
+	// take only the first k eigenvectors (loadings)
+	loadk := loadings.Slice(0, d, 0, k).(*mat.Dense)
 
 	// scores = X * loadings_k
 	// scores is n x k matrix (cell embeddings)

@@ -1,0 +1,19 @@
+# Case 1: empty graph
+{"nodes":0,"edges":{},"totalWeight":0,"resolution":1.0,"gamma":1.0,"theta":0.01,"maxIter":10}
+@ no nodes → clusters should be empty
+{"clusters":[]}
+
+# Case 2: single-node graph
+{"nodes":1,"edges":{"0":[]},"totalWeight":0,"resolution":1.0,"gamma":1.0,"theta":0.01,"maxIter":10}
+@ one node, no edges → stays in its own community
+{"clusters":[0]}
+
+# Case 3: two-node fully connected graph
+{"nodes":2,"edges":{"0":[{"to":1,"weight":1}],"1":[{"to":0,"weight":1}]},"totalWeight":1.0,"resolution":1.0,"gamma":1.0,"theta":0.01,"maxIter":10}
+@ strong connection between 0 and 1 → expect a single community
+{"clusters":[0,0]}
+
+# Case 4: three-node chain 0-1-2
+{"nodes":3,"edges":{"0":[{"to":1,"weight":1}],"1":[{"to":0,"weight":1},{"to":2,"weight":1}],"2":[{"to":1,"weight":1}]},"totalWeight":2.0,"resolution":1.0,"gamma":1.0,"theta":0.01,"maxIter":10}
+@ simple small graph; here we expect all nodes in one community
+{"clusters":[0,0,0]}
