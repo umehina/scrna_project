@@ -114,12 +114,12 @@ func runUMAPPipeline(coordPath, outPath string) error {
 	fmt.Printf("NodeID range: %d..%d\n", nodeIDs[0], nodeIDs[len(nodeIDs)-1])
 
 	// 2. UMAP hyperparameters (tune here for now)
-	nNeighbors := 30
+	nNeighbors := 15
 	nComponents := 2
 	nEpochs := 1000
 	learningRate := 0.1
 	negativeSamples := 10
-	minDist := 0.1
+	minDist := 0.02
 	// Note: if fuzzy edges mean is not within 0.2–0.6, parameters may not be ideal.
 
 	fmt.Println("Running UMAP...")

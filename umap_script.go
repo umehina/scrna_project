@@ -1,14 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"time"
-	"fmt"
+
 	"gonum.org/v1/gonum/mat"
 )
 
+// ============================ Types ============================
 
+// Optional config struct if you ever want a single-arg API.
 type UMAPConfig struct {
 	NNeighbors     int
 	MinDist        float64
@@ -19,21 +22,91 @@ type UMAPConfig struct {
 	Metric         func(a, b []float64) float64
 }
 
+// UMAPEdge represents an undirected fuzzy edge between i and j with weight μ_ij.
 type UMAPEdge struct {
 	I, J   int
-	Weight float64 // fuzzy connection strength p_ij in (0,1]
+	Weight float64 // fuzzy connection strength μ_ij in (0,1]
 }
 
+// pair is used as a map key for directed / undirected probabilities.
 type pair struct {
 	I, J int
 }
 
-// UMAP runs the full pipeline on high-dimensional data:
-//   data: [][]float64, each row is a vector (e.g., PCs)
-//   cfg:   UMAPConfig
-// Returns: low-dimensional embedding [][]float64 (n × NComponents)
+// ============================ High-level UMAP ============================
+
+// defaultAB returns (a, b) parameters for the low-dimensional UMAP kernel
+// Φ(r^2) = 1 / (1 + a * r^(2b))^b.
+// These values approximate umap-learn's defaults for spread=1.0, min_dist≈0.1.
+func defaultAB(minDist float64) (float64, float64) {
+    if minDist <= 0 {
+        minDist = 0.1
+    }
+    // Base values roughly matching umap-learn for min_dist≈0.1
+    baseA, baseB := 1.929, 0.7915
+
+    // Heuristic: as minDist gets smaller, make the kernel steeper near 0
+    scale := 0.1 / minDist          // minDist<0.1 → scale>1
+    a := baseA * scale * scale      // steeper decay for small minDist
+    b := baseB
+
+    return a, b
+}
+
+
+// normalizeEmbedding recenters at 0 and rescales so the furthest point
+// has radius targetRadius.
+func normalizeEmbedding(embedding [][]float64, targetRadius float64) {
+	n := len(embedding)
+	if n == 0 {
+		return
+	}
+	dim := len(embedding[0])
+
+	// 1) mean-center
+	mean := make([]float64, dim)
+	for i := 0; i < n; i++ {
+		for d := 0; d < dim; d++ {
+			mean[d] += embedding[i][d]
+		}
+	}
+	for d := 0; d < dim; d++ {
+		mean[d] /= float64(n)
+	}
+	for i := 0; i < n; i++ {
+		for d := 0; d < dim; d++ {
+			embedding[i][d] -= mean[d]
+		}
+	}
+
+	// 2) find max radius
+	maxR2 := 0.0
+	for i := 0; i < n; i++ {
+		var r2 float64
+		for d := 0; d < dim; d++ {
+			r2 += embedding[i][d] * embedding[i][d]
+		}
+		if r2 > maxR2 {
+			maxR2 = r2
+		}
+	}
+	if maxR2 == 0 {
+		return
+	}
+	scale := targetRadius / math.Sqrt(maxR2)
+
+	// 3) scale
+	for i := 0; i < n; i++ {
+		for d := 0; d < dim; d++ {
+			embedding[i][d] *= scale
+		}
+	}
+}
+
+// UMAP is the main entry point: it constructs the high-dimensional fuzzy graph
+// and optimizes a low-dimensional embedding using a UMAP-style objective.
 func UMAP(data [][]float64,nNeighbors int,nComponents int,nEpochs int,learningRate float64,negativeSamples int,minDist float64) [][]float64 {
-	// Optional: Gatekeeping parameters (we dont wanna work with weird numbers dont we). 
+	// ---- 0) Parameter sanity / defaults ----
 	if nNeighbors <= 0 {
 		nNeighbors = 15
 	}
@@ -53,41 +126,76 @@ func UMAP(data [][]float64,nNeighbors int,nComponents int,nEpochs int,learningRa
 		minDist = 0.1
 	}
 
-	// 1) distance matrix from data (using Euclidean)
+	n := len(data)
+	if n == 0 {
+		return nil
+	}
+
+	// ---- 1) Distance matrix (high-dimensional) ----
 	distMtx := computeDistanceMatrix(data, Euclidean)
 
-	// 2) kNN for UMAP (directed, raw distances)
+	// ---- 2) kNN indices + distances ----
 	knnIdx, knnDist := BuildKNNForUMAP(distMtx, nNeighbors)
 
-	// 3) fuzzy graph
+	// ---- 3) Fuzzy graph (high-dimensional probabilities μ_ij) ----
 	fuzzyEdges := buildFuzzyGraph(knnIdx, knnDist, nNeighbors)
-	debugFuzzyEdges(fuzzyEdges)
+	// debugFuzzyEdges(fuzzyEdges)
 
+	// ---- 4) Initialize low-dimensional embedding ----
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	embedding := initEmbedding(n, nComponents, rng)
 
-	// 4) initialize embedding
-	embedding := initEmbedding(len(data), nComponents)
+	// ---- 5) Optimize using UMAP-style objective ----
+	a, b := defaultAB(minDist)
+	repulsionStrength := 1.2
 
-	// 5) optimize with SGD + negative sampling
-	optimize(embedding, fuzzyEdges, nEpochs, learningRate, negativeSamples, minDist)
-	normalizeEmbedding(embedding, 10.0) 
+	optimizeUMAP(
+		embedding,
+		fuzzyEdges,
+		nEpochs,
+		learningRate,
+		negativeSamples,   // negativeSampleRate
+		repulsionStrength, // gamma
+		a, b,
+		rng,
+	)
+
+	// ---- 6) Optional post-normalization for "nice" plot scales ----
+	normalizeEmbedding(embedding, 10.0)
+
 	return embedding
 }
 
-
 // ============================ Distance / kNN ============================
 
+// computeDistanceMatrix builds an N×N symmetric distance matrix for data.
+// Adapted from DistanceMatrix used in clustering kNN.
+func computeDistanceMatrix(data [][]float64, metric func([]float64, []float64) float64) *mat.Dense {
+	n := len(data)
+	m := mat.NewDense(n, n, nil)
+
+	for i := 0; i < n; i++ {
+		m.Set(i, i, 0)
+		for j := i + 1; j < n; j++ {
+			d := metric(data[i], data[j])
+			m.Set(i, j, d)
+			m.Set(j, i, d)
+		}
+	}
+	return m
+}
+
 // BuildKNNForUMAP builds the directed kNN structure needed by UMAP.
-// Adapted from BuildKNNGraph
 // It returns:
 //   - knnIdx[i]  = indices of the k nearest neighbors of point i
-//   - knnDist[i] = corresponding RAW distances (unlike the cluster knn where we did the inverse?)
+//   - knnDist[i] = corresponding RAW distances
+//
 // Amy Ji - 12/06/2025; Vania Halim 11/27/2025; Qinglin Kong 11/29/2025
 func BuildKNNForUMAP(distanceMtx *mat.Dense, k int) ([][]int, [][]float64) {
 	if distanceMtx == nil {
 		return nil, nil
 	}
 	rows, _ := distanceMtx.Dims()
-
 	if rows == 0 || k <= 0 {
 		return nil, nil
 	}
@@ -107,18 +215,22 @@ func BuildKNNForUMAP(distanceMtx *mat.Dense, k int) ([][]int, [][]float64) {
 		knnDist[r] = make([]float64, len(knn))
 		for i, nb := range knn {
 			knnIdx[r][i] = nb.Index
-			knnDist[r][i] = nb.Distance // RAW distance
+			knnDist[r][i] = nb.Distance
 		}
 	}
 
 	return knnIdx, knnDist
 }
 
-// rho: distance to the closest non-self neighbor. Each cell will have one rho value. 
-// sigma: bandwidth that's chosen (optimized iteratively) so that the sum of probabilities to the k neighbors is approximately log2(k). (Our max iteration is 64.)
-// computeRhoSigma implements the UMAP local connectivity scaling.
-// Given knnDist[i] = distances from point i to its k nearest neighbors
-// it computes rho[i] (smallest positive distance) and sigma[i] (found by binary search so that sum_j exp( -max(0, d_ij - rho_i) / sigma_i ) ≈ log2(k)).
+// ======================= Rho / Sigma and Probabilities ===================
+
+// computeRhoSigma implements UMAP's local connectivity scaling.
+// Given knnDist[i] = distances from point i to its k nearest neighbors,
+// it computes:
+//   rho[i]   = smallest positive distance, or 0 if none
+//   sigma[i] = bandwidth chosen by binary search so that
+//              sum_j exp(-max(0, d_ij - rho_i) / sigma_i) ≈ log2(k)
+//
 // Amy Ji - 12/06/2025
 func computeRhoSigma(knnDist [][]float64, k int) (rho []float64, sigma []float64) {
 	n := len(knnDist)
@@ -142,21 +254,19 @@ func computeRhoSigma(knnDist [][]float64, k int) (rho []float64, sigma []float64
 
 		// 1) rho_i = smallest strictly positive distance, or 0 if none
 		minPos := math.Inf(1)
-		foundPos := false
 		for _, d := range dist {
 			if d > 0 && d < minPos {
 				minPos = d
-				foundPos = true
 			}
 		}
-		if !foundPos || math.IsInf(minPos, 1) {
+		if math.IsInf(minPos, 1) {
 			rho[i] = 0.0
 		} else {
 			rho[i] = minPos
 		}
 
-		// sigma_i via binary search so that sum_j p_{j|i} ≈ log2(k)
-		//  where p_{j|i} = exp(-max(0, d_ij - rho_i) / sigma_i)
+		// 2) sigma_i via binary search so that sum_j p_{j|i} ≈ log2(k),
+		//    where p_{j|i} = exp(-max(0, d_ij - rho_i) / sigma_i).
 		allAtOrBelowRho := true
 		for _, d := range dist {
 			if d > rho[i] {
@@ -190,14 +300,13 @@ func computeRhoSigma(knnDist [][]float64, k int) (rho []float64, sigma []float64
 			}
 
 			if math.Abs(sumProbs-target) < tolerance {
-				// we've found the perfect sigma value. 
 				break
 			}
 			if sumProbs > target {
-				// sum of probabilities too big -> sigma too small -> shrink hi
+				// probabilities too big → sigma too small → enlarge sigma (increase hi)
 				hi = mid
 			} else {
-				// probabilities too small -> sigma too large -> increase lo
+				// probabilities too small → sigma too large → shrink sigma (increase lo)
 				lo = mid
 			}
 		}
@@ -206,22 +315,19 @@ func computeRhoSigma(knnDist [][]float64, k int) (rho []float64, sigma []float64
 	}
 
 	return rho, sigma
-	// rho and sigma correspond 
 }
 
-// buildDirectedProbs computes directed probabilities p_{j|i} for each edge (i -> j).
+// buildDirectedProbs computes directed probabilities p_{j|i} for each edge (i → j).
 // It returns a sparse map keyed by (i,j).
+//
 // Amy Ji - 12/06/2025
 func buildDirectedProbs(knnIdx [][]int, knnDist [][]float64, rho, sigma []float64) map[pair]float64 {
 	n := len(knnIdx)
 	directed := make(map[pair]float64)
 
-	// for each point i, a set of directed edge probbilities p_ij to its neighbors j
-	// This is the probability that point X_j is a neighbor of point X_i. 
 	for i := 0; i < n; i++ {
 		neighbors := knnIdx[i]
 		dists := knnDist[i]
-
 		if len(neighbors) != len(dists) {
 			continue
 		}
@@ -238,19 +344,15 @@ func buildDirectedProbs(knnIdx [][]int, knnDist [][]float64, rho, sigma []float6
 
 			var p float64
 			if effective == 0 {
-				// this means that dist(i,j) equals rho.
-				// which means that this j is the closest neighbor of i
-				// it has the greatest probability to be selected as neighbor (p=1)
+				// distance equals rho_i → closest neighbors get probability 1
+				p = 1.0
+			} else if sigma[i] == 0 {
+				// extremely rare; avoid division by zero
 				p = 1.0
 			} else {
-				if sigma[i] == 0 {
-					// this is to avoid having a sigma == 0 (which is rare, but we absolutely don't want this to happen in any case)
-					p = 1.0
-				} else {
-					// otherwise we calculate p, which is kind of a  probablistic "similarity score".
-					p = math.Exp(-effective / sigma[i])
-				}
+				p = math.Exp(-effective / sigma[i])
 			}
+
 			if p > 0 {
 				directed[pair{I: i, J: j}] = p
 			}
@@ -261,10 +363,13 @@ func buildDirectedProbs(knnIdx [][]int, knnDist [][]float64, rho, sigma []float6
 }
 
 // buildFuzzyGraph builds the undirected UMAP fuzzy graph (fuzzy simplicial set)
-// from the kNN structure. It uses the UMAP scaling (rho,sigma), directed
-// probabilities p_{j|i}, and fuzzy union: p_ij = p_{i|j} + p_{j|i} - p_{i|j} * p_{j|i}
-// This behaves like a probabilistic OR: which means that if either direction is strong, the undirected edge is strong. 
-// Returns a slice of UMAPEdge, which we will later feed into the optimizer function.
+// from the kNN structure, using:
+//   - rho, sigma from computeRhoSigma
+//   - directed probabilities p_{j|i}
+//   - fuzzy union: μ_ij = p_{i|j} + p_{j|i} - p_{i|j} * p_{j|i}
+//
+// Returns a flat slice of UMAPEdge, which is fed into the optimizer.
+//
 // Amy Ji - 12/06/2025
 func buildFuzzyGraph(knnIdx [][]int, knnDist [][]float64, nNeighbors int) []UMAPEdge {
 	n := len(knnIdx)
@@ -272,27 +377,27 @@ func buildFuzzyGraph(knnIdx [][]int, knnDist [][]float64, nNeighbors int) []UMAP
 		return nil
 	}
 
-	// Compute rho and sigma for all cells
+	// 1) Compute rho and sigma for all points
 	rho, sigma := computeRhoSigma(knnDist, nNeighbors)
-	// Build directed probabilities P_ij
-	directed := buildDirectedProbs(knnIdx, knnDist, rho, sigma) // Note that in directed, i is point of interest and j is its neighbors. (P_ji)
 
-	// for each pair of i,j, we store their undirected prob. 
+	// 2) Directed probabilities P_ij
+	directed := buildDirectedProbs(knnIdx, knnDist, rho, sigma)
+
+	// 3) Fuzzy union for undirected edges
 	undirected := make(map[pair]float64)
 	for ij, p_ij := range directed {
-		i,j := ij.I, ij.J
+		i, j := ij.I, ij.J
 		if i > j {
 			continue
 		}
-
-		p_ji := directed[pair{I:j, J:i}] //P_ij
-		p := p_ij + p_ji - p_ij*p_ji // compute the new undirected prob.
-		if p>0 {
-			undirected[pair{I:i, J:j}] = p
+		p_ji := directed[pair{I: j, J: i}]
+		p := p_ij + p_ji - p_ij*p_ji
+		if p > 0 {
+			undirected[pair{I: i, J: j}] = p
 		}
 	}
 
-	// convert the map into []UMAPEdge. Umap optimizer will work on this flat slice of edges.
+	// 4) Convert map → []UMAPEdge
 	edges := make([]UMAPEdge, 0, len(undirected))
 	for ij, w := range undirected {
 		edges = append(edges, UMAPEdge{
@@ -303,221 +408,177 @@ func buildFuzzyGraph(knnIdx [][]int, knnDist [][]float64, nNeighbors int) []UMAP
 	}
 
 	return edges
-
 }
 
+// debugFuzzyEdges prints quick stats on fuzzy edge weights.
 func debugFuzzyEdges(edges []UMAPEdge) {
-    if len(edges) == 0 {
-        fmt.Println("No edges")
-        return
-    }
-    minW := edges[0].Weight
-    maxW := edges[0].Weight
-    sumW := 0.0
-    for _, e := range edges {
-        if e.Weight < minW {
-            minW = e.Weight
-        }
-        if e.Weight > maxW {
-            maxW = e.Weight
-        }
-        sumW += e.Weight
-    }
-    meanW := sumW / float64(len(edges))
-    fmt.Printf("Fuzzy edges: n=%d, min=%.4g, mean=%.4g, max=%.4g\n",
-        len(edges), minW, meanW, maxW)
+	if len(edges) == 0 {
+		fmt.Println("No edges")
+		return
+	}
+	minW := edges[0].Weight
+	maxW := edges[0].Weight
+	sumW := 0.0
+	for _, e := range edges {
+		if e.Weight < minW {
+			minW = e.Weight
+		}
+		if e.Weight > maxW {
+			maxW = e.Weight
+		}
+		sumW += e.Weight
+	}
+	meanW := sumW / float64(len(edges))
+	fmt.Printf("Fuzzy edges: n=%d, min=%.4g, mean=%.4g, max=%.4g\n",
+		len(edges), minW, meanW, maxW)
 }
 
-// initEmbedding initializes a random low-dimensional embedding. (points are randomly placed on low dimension))
-// Amy Ji - 12/06/2025
-func initEmbedding(n, dim int) [][]float64 {
+// ============================ Initialization ============================
+
+// initEmbedding initializes a random low-dimensional embedding.
+func initEmbedding(n, dim int, rng *rand.Rand) [][]float64 {
 	embedding := make([][]float64, n)
-	rand.Seed(time.Now().UnixNano())
 	scale := 0.0001
 
 	for i := 0; i < n; i++ {
 		embedding[i] = make([]float64, dim)
 		for d := 0; d < dim; d++ {
-			embedding[i][d] = scale * rand.NormFloat64()
+			embedding[i][d] = scale * rng.NormFloat64()
 		}
 	}
 	return embedding
 }
 
+// ============================ Optimization ============================
 
-// This function is entirely generated by chatgpt. 
-// optimize is supposed to do two things:
-// for each edge(i,j), it pulls them closer
-// for each edge, it samples some random points and pushes them away from i.
-func optimize(embedding [][]float64,edges []UMAPEdge,nEpochs int,learningRate float64,negativeSamples int,minDist float64) {
+// phi is the UMAP kernel in low-dimensional space:
+// Φ(r^2) = 1 / (1 + a * r^(2b))^b.
+func phi(dist2, a, b float64) float64 {
+	return 1.0 / math.Pow(1.0+a*math.Pow(dist2, b), b)
+}
+
+// makeEpochsPerSample returns, for each edge weight, how many epochs should
+// elapse between successive samples of that edge.
+func makeEpochsPerSample(weights []float64, nEpochs int) []float64 {
+	result := make([]float64, len(weights))
+	maxW := 0.0
+	for _, w := range weights {
+		if w > maxW {
+			maxW = w
+		}
+	}
+	if maxW == 0 {
+		for i := range result {
+			result[i] = -1
+		}
+		return result
+	}
+
+	nSamples := make([]float64, len(weights))
+	for i, w := range weights {
+		nSamples[i] = float64(nEpochs) * (w / maxW)
+	}
+	for i, ns := range nSamples {
+		if ns > 0 {
+			result[i] = float64(nEpochs) / ns
+		} else {
+			result[i] = -1.0 // never sampled
+		}
+	}
+	return result
+}
+
+// optimizeUMAP performs UMAP-style stochastic gradient descent on the embedding.
+// For each fuzzy edge (i,j), it applies an attractive force, and for each such
+// step it samples negative examples k and applies repulsive forces from i to k.
+func optimizeUMAP(embedding [][]float64,edges []UMAPEdge,nEpochs int,learningRate float64,negativeSampleRate int,repulsionStrength float64,a, b float64,rng *rand.Rand,) {
 	n := len(embedding)
 	if n == 0 || len(edges) == 0 {
 		return
 	}
 	dim := len(embedding[0])
 
-	if nEpochs <= 0 {
-		nEpochs = 200
-	}
-	if learningRate <= 0 {
-		learningRate = 1.0
-	}
-	if negativeSamples < 0 {
-		negativeSamples = 0
-	}
-	if minDist <= 0 {
-		minDist = 0.1
+	// Prepack edge endpoints and weights
+	heads := make([]int, len(edges))
+	tails := make([]int, len(edges))
+	weights := make([]float64, len(edges))
+	for e, edge := range edges {
+		heads[e] = edge.I
+		tails[e] = edge.J
+		weights[e] = edge.Weight
 	}
 
-	// UMAP kernel parameters (for spread=1, min_dist≈0.1 these are the
-	// standard values; good enough for our purposes).
-	const a = 1.929
-	const b = 0.7915
+	epochsPerSample := makeEpochsPerSample(weights, nEpochs)
+	nextSample := make([]float64, len(edges)) // all 0.0 initially
+
+	lrInitial := learningRate
 
 	for epoch := 0; epoch < nEpochs; epoch++ {
-		// Shuffle edges for stochasticity
-		rand.Shuffle(len(edges), func(i, j int) {
-			edges[i], edges[j] = edges[j], edges[i]
-		})
+		// linear decay like umap-learn
+		lr := lrInitial * (1.0 - float64(epoch)/float64(nEpochs))
+		if lr <= 0 {
+			continue
+		}
 
-		for _, e := range edges {
-			i, j := e.I, e.J
-			if i < 0 || i >= n || j < 0 || j >= n {
+		for e := range edges {
+			if epochsPerSample[e] <= 0 {
+				continue // never sampled
+			}
+			if float64(epoch) < nextSample[e] {
 				continue
 			}
+			nextSample[e] += epochsPerSample[e]
+
+			i := heads[e]
+			j := tails[e]
 
 			yi := embedding[i]
 			yj := embedding[j]
 
-			// ---------- POSITIVE (attractive) update ----------
-			var dist2 float64
+			// --- Attractive update (positive edge i-j) ---
+			diff := make([]float64, dim)
+			dist2 := 0.0
 			for d := 0; d < dim; d++ {
-				diff := yi[d] - yj[d]
-				dist2 += diff * diff
+				diff[d] = yi[d] - yj[d]
+				dist2 += diff[d] * diff[d]
 			}
-			if dist2 > 0 {
-				dist := math.Sqrt(dist2)
-				// low-dim similarity q_ij
-				r2b := math.Pow(dist, 2.0*b)
-				q := 1.0 / (1.0 + a*r2b)
+			dist2 += 1e-8 // tiny epsilon to avoid div-by-zero
 
-				p := e.Weight // high-dim similarity p_ij in [0,1]
-				// gradient magnitude ~ (p - q)
-				coef := learningRate * (p - q)
+			// grad coeff approximating umap-learn
+			gradCoeff := -2.0 * a * b * math.Pow(dist2, b-1.0)
+			gradCoeff /= (a*math.Pow(dist2, b) + 1.0)
 
-				for d := 0; d < dim; d++ {
-					diff := yi[d] - yj[d]
-					grad := coef * diff
-					yi[d] -= grad
-					yj[d] += grad
-				}
+			for d := 0; d < dim; d++ {
+				grad := gradCoeff * diff[d]
+				yi[d] += lr * grad
+				yj[d] -= lr * grad
 			}
 
-			// ---------- NEGATIVE SAMPLING (repulsive) ----------
-			if negativeSamples == 0 {
-				continue
-			}
-
-			for s := 0; s < negativeSamples; s++ {
-				k := rand.Intn(n)
-				if k == i || k == j {
+			// --- Negative sampling: repulsive edges from i to random k ---
+			for ns := 0; ns < negativeSampleRate; ns++ {
+				k := rng.Intn(n)
+				if k == i {
 					continue
 				}
 				yk := embedding[k]
 
-				var dist2Neg float64
+				ndiff := make([]float64, dim)
+				dist2neg := 0.0
 				for d := 0; d < dim; d++ {
-					diff := yi[d] - yk[d]
-					dist2Neg += diff * diff
+					ndiff[d] = yi[d] - yk[d]
+					dist2neg += ndiff[d] * ndiff[d]
 				}
-				if dist2Neg == 0 {
-					continue
-				}
-				distNeg := math.Sqrt(dist2Neg)
-				r2bNeg := math.Pow(distNeg, 2.0*b)
-				qNeg := 1.0 / (1.0 + a*r2bNeg)
+				dist2neg += 1e-8
 
-				// For negatives, p = 0, so (p - q) = -q < 0
-				coefNeg := learningRate * (0.0 - qNeg)
+				repGradCoeff := 2.0 * repulsionStrength * b
+				repGradCoeff /= (0.001 + dist2neg) * (a*math.Pow(dist2neg, b) + 1.0)
 
 				for d := 0; d < dim; d++ {
-					diff := yi[d] - yk[d]
-					grad := coefNeg * diff
-					// Since coefNeg < 0, this pushes yi and yk apart
-					yi[d] -= grad
-					yk[d] += grad
+					grad := repGradCoeff * ndiff[d]
+					yi[d] += lr * grad
+					yk[d] -= lr * grad
 				}
 			}
 		}
 	}
-}
-
-
-// normalize the embedded principle components so that they stay at the same scale.
-func normalizeEmbedding(embedding [][]float64, targetRadius float64) {
-    n := len(embedding)
-    if n == 0 {
-        return
-    }
-    dim := len(embedding[0])
-
-    // 1. Compute mean per dimension
-    mean := make([]float64, dim)
-    for i := 0; i < n; i++ {
-        for d := 0; d < dim; d++ {
-            mean[d] += embedding[i][d]
-        }
-    }
-    for d := 0; d < dim; d++ {
-        mean[d] /= float64(n)
-    }
-
-    // 2. Center embedding
-    for i := 0; i < n; i++ {
-        for d := 0; d < dim; d++ {
-            embedding[i][d] -= mean[d]
-        }
-    }
-
-    // 3. Find max radius
-    maxR := 0.0
-    for i := 0; i < n; i++ {
-        var r2 float64
-        for d := 0; d < dim; d++ {
-            r2 += embedding[i][d] * embedding[i][d]
-        }
-        if r2 > maxR {
-            maxR = r2
-        }
-    }
-    if maxR == 0 {
-        return
-    }
-    scale := targetRadius / math.Sqrt(maxR)
-
-    // 4. Scale
-    for i := 0; i < n; i++ {
-        for d := 0; d < dim; d++ {
-            embedding[i][d] *= scale
-        }
-    }
-}
-
-
-// computeDistanceMatrix builds an N×N symmetric distance matrix for data. (for UMAP)
-// Adapted from func DistanceMatrix for clustering knn. 
-// Amy Ji - 12/06/2025; Vania Halim 11/27/2025
-func computeDistanceMatrix(data [][]float64, metric func([]float64, []float64) float64) *mat.Dense {
-	n := len(data)
-	m := mat.NewDense(n, n, nil)
-
-	for i := 0; i < n; i++ {
-		m.Set(i, i, 0)
-		for j := i + 1; j < n; j++ {
-			d := metric(data[i], data[j])
-			m.Set(i, j, d)
-			m.Set(j, i, d)
-		}
-	}
-	return m
 }
