@@ -101,26 +101,26 @@ The Shiny app will open in your default browser at `http://127.0.0.1:XXXX`
 
 ```
 scrna_project/
-├── main.go                 # Main pipeline entry point
-├── clustering.go           # Leiden clustering implementation
-├── pca.go                  # PCA computation
-├── normalization.go        # Normalization methods
-├── preprocessing.go        # QC and filtering
-├── umap_script.go         # UMAP interface
-├── tSNE.go                # t-SNE implementation
-├── io.go                  # Data I/O functions
-├── helpers.go             # Helper functions
-├── datatypes.go           # Data structures
-├── app.R                  # Main Shiny app
+├── main.go                   # Main pipeline entry point
+├── clustering.go             # Leiden clustering implementation
+├── pca.go                    # PCA computation
+├── normalization.go          # Normalization methods
+├── preprocessing.go          # QC and filtering
+├── umap_script.go            # UMAP interface
+├── tSNE.go                   # t-SNE implementation
+├── io.go                     # Data I/O functions
+├── helpers.go                # Helper functions
+├── datatypes.go              # Data structures
+├── app.R                     # Main Shiny app
 ├── R/
-│   ├── Rshiny.R          # Alternative Shiny interface
+│   ├── Rshiny.R              # Alternative Shiny interface
 │   ├── verify_clustering.R   # Clustering verification
-│   ├── plot_leiden.R     # Leiden plotting utilities
-│   └── visualization.R   # General plotting functions
+│   ├── plot_leiden.R         # Leiden plotting utilities
+│   └── visualization.R       # General plotting functions
 ├── data/
-│   └── scRNA_dataset.csv # Input count matrix
-├── output/               # Pipeline output files
-└── README.md            # This file
+│   └── scRNA_dataset.csv     # Input count matrix
+├── output/                   # Pipeline output files
+└── README.md                 # This file
 ```
 
 ---
