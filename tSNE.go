@@ -1,4 +1,3 @@
-// functions.go
 
 package main
 
@@ -14,6 +13,7 @@ type TSNEResult struct {
 	scores *mat.Dense
 }
 
+// TSNE performs t-SNE on the PCAResult p, returning a TSNEResult.
 func (p *PCAResult) TSNE(dimsOut int, perplexity, learningRate float64, maxIter int)*TSNEResult{
 	if p == nil || p.scores == nil {
 		fmt.Errorf("TSNE: PCAResult or score is nil")

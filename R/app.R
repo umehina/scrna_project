@@ -2,6 +2,8 @@ library(shiny)
 library(ggplot2)
 library(dplyr)
 
+options(shiny.maxRequestSize = 200 * 1024^2)  # 50 MB
+
 ui <- fluidPage(
   titlePanel("scRNA-seq pipeline (Go backend + Shiny)"),
   
@@ -160,7 +162,7 @@ server <- function(input, output, session) {
     y_label <- if (embed_method == "umap") "UMAP2" else "t-SNE2"
     
     ggplot(df, aes_string(x = xcol, y = ycol, color = "cluster")) +
-      geom_point(size = 1, alpha = 0.8) +
+      geom_point(size = 0.8, alpha = 0.8) +
       coord_equal() +
       theme_minimal(base_size = 14) +
       labs(
@@ -315,12 +317,19 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(rv$combined, rv$xcol, rv$ycol)
-      png(file, width = 600, height = 600, res = 300)
+      
       p <- make_embedding_plot(rv$combined, rv$xcol, rv$ycol, input$embed)
-      print(p)
-      dev.off()
+      
+      ggsave(
+        filename = file,
+        plot     = p,
+        width    = 6,
+        height   = 6,
+        dpi      = 300
+      )
     }
   )
+  
 }
 
 shinyApp(ui, server)

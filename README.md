@@ -7,6 +7,10 @@ A single-cell RNA-seq analysis pipeline implemented in Go with interactive visua
 ### Go
 - Go 1.25.0 or higher
 - Install from: https://go.dev/doc/install
+- Required Go packages (should be automatically handled by go.mod):
+	github.com/e-gun/go-tsne/tsne v0.0.0-20230417234659-5e6e23b13c15
+	gonum.org/v1/gonum v0.16.0
+	gonum.org/v1/plot v0.16.0
 
 ### R and Required Packages
 - R version 4.0 or higher
@@ -44,7 +48,7 @@ A single-cell RNA-seq analysis pipeline implemented in Go with interactive visua
 
 ```bash
 # From the project root directory
-R -e "shiny::runApp('app.R')"
+Rscript -e "shiny::runApp('R')"
 ```
 
 Or from within R:
@@ -56,7 +60,7 @@ runApp("app.R")
 The Shiny app will open in your default browser at `http://127.0.0.1:XXXX`
 
 **Features:**
-- Upload custom count matrix CSV files
+- Upload custom count matrix CSV files (max 200mb)
 - Adjust QC filters (min/max features, counts, mitochondrial content)
 - Choose normalization method (Pearson residuals or log-normalization)
 - Configure PCA parameters (number of PCs, axes to plot)
@@ -106,14 +110,14 @@ scrna_project/
 ├── pca.go                    # PCA computation
 ├── normalization.go          # Normalization methods
 ├── preprocessing.go          # QC and filtering
-├── umap_script.go            # UMAP interface
-├── tSNE.go                   # t-SNE implementation
+├── umap_script.go            # UMAP implementation.
+├── tSNE.go                   # t-SNE package implementation
 ├── io.go                     # Data I/O functions
 ├── helpers.go                # Helper functions
 ├── datatypes.go              # Data structures
 ├── app.R                     # Main Shiny app
 ├── R/
-│   ├── Rshiny.R              # Alternative Shiny interface
+│   ├── app.R              # Alternative Shiny interface
 │   ├── verify_clustering.R   # Clustering verification
 │   ├── plot_leiden.R         # Leiden plotting utilities
 │   └── visualization.R       # General plotting functions
