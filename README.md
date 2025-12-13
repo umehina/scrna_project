@@ -23,7 +23,7 @@ A single-cell RNA-seq analysis pipeline implemented in Go with interactive visua
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/umehina/scrna_project
    cd scrna_project
    ```
 
