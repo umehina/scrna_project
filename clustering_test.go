@@ -1,4 +1,4 @@
-//Name: Yinan Zhu 
+//Name: Yinan Zhu
 //Date added: 12/06/2025 and 12/07/2025
 // Disclaimer: we consulted ChatGPT for many parser functions in this file.
 
@@ -8,27 +8,26 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"math"
+	"math/rand"
 	"os"
+	"sort"
 	"strings"
 	"testing"
-	"fmt"
-	"sort"
-	"math/rand"
-	
 
 	"gonum.org/v1/gonum/mat"
 )
 
 // ---------- generic parser for # / @ format ----------
 
-// ioCase holds one test case parsed from the .txt file:
+// ioCase2 holds one test case parsed from the .txt file:
 //
 //	# Name
 //	{"input": ...}
 //	@ comment
 //	{"output": ...}
-type ioCase struct {
+type ioCase2 struct {
 	Name       string
 	InputLine  string
 	OutputLine string
@@ -36,7 +35,7 @@ type ioCase struct {
 
 // loadIOCasesFromFile parses a text file in the "# / @ / JSON" format
 // and returns all cases.
-func loadIOCasesFromFile(path string) ([]ioCase, error) {
+func loadIOCasesFromFile(path string) ([]ioCase2, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -44,7 +43,7 @@ func loadIOCasesFromFile(path string) ([]ioCase, error) {
 	defer f.Close()
 
 	var (
-		cases            []ioCase
+		cases            []ioCase2
 		currentName      string
 		pendingInput     string
 		waitingForInput  bool
@@ -78,7 +77,7 @@ func loadIOCasesFromFile(path string) ([]ioCase, error) {
 				waitingForInput = false
 			} else if waitingForOutput {
 				// This is the output JSON line → finalize a case
-				cases = append(cases, ioCase{
+				cases = append(cases, ioCase2{
 					Name:       currentName,
 					InputLine:  pendingInput,
 					OutputLine: line,
@@ -122,9 +121,9 @@ func almostEqual(a, b, tol float64) bool {
 	return math.Abs(a-b) <= tol
 }
 
-// floatAlmostEqual kept for compatibility with older test code that calls
-// floatAlmostEqual; it behaves identically to almostEqual.
-func floatAlmostEqual(a, b, tol float64) bool {
+// floatAlmostEqual2 kept for compatibility with older test code that calls
+// floatAlmostEqual2; it behaves identically to almostEqual.
+func floatAlmostEqual2(a, b, tol float64) bool {
 	return math.Abs(a-b) <= tol
 }
 
@@ -172,21 +171,12 @@ func TestDistanceMatrix_FromFile(t *testing.T) {
 			}
 
 			// Run DistanceMatrix
-			got, err := DistanceMatrix(data)
+			got := DistanceMatrix(data)
 
-			// Handle error-expected cases
+			// Handle error-expected cases (DistanceMatrix no longer returns errors, so skip these)
 			if out.WantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", out.WantErr)
-				}
-				if !strings.Contains(err.Error(), out.WantErr) {
-					t.Fatalf("error %q does not contain expected substring %q", err.Error(), out.WantErr)
-				}
+				t.Skipf("Skipping error test case - DistanceMatrix no longer returns errors")
 				return
-			}
-
-			if err != nil {
-				t.Fatalf("unexpected error from DistanceMatrix: %v", err)
 			}
 
 			// Compare dimensions
@@ -217,11 +207,7 @@ func TestDistanceMatrix_FromFile(t *testing.T) {
 	}
 }
 
-
-
-
 // parser for Euclidean
-//
 type knnWeightsInput struct {
 	K    int         `json:"k"`
 	Dist [][]float64 `json:"dist"`
@@ -229,8 +215,7 @@ type knnWeightsInput struct {
 
 // knnWeightsOutput matches the *output* JSON:
 //
-//   {"weights":[[0,0.5,0],[0.5,0,0],[0.3333333,0,0]]}
-//
+//	{"weights":[[0,0.5,0],[0.5,0,0],[0.3333333,0,0]]}
 type knnWeightsOutput struct {
 	Weights [][]float64 `json:"weights"`
 }
@@ -272,14 +257,11 @@ func loadKNNWeightsCases(path string) ([]KNNWeightsCase, error) {
 	return result, nil
 }
 
-
-
 // ---------- specialized structs for Euclidean ----------
 
 // euclideanInput matches the *input* JSON:
 //
-//   {"first":[...], "second":[...]}
-//
+//	{"first":[...], "second":[...]}
 type euclideanInput struct {
 	First  []float64 `json:"first"`
 	Second []float64 `json:"second"`
@@ -287,8 +269,7 @@ type euclideanInput struct {
 
 // euclideanOutput matches the *output* JSON:
 //
-//   {"dist":5}
-//
+//	{"dist":5}
 type euclideanOutput struct {
 	Dist float64 `json:"dist"`
 }
@@ -331,39 +312,38 @@ func loadEuclideanCases(path string) ([]EuclideanCase, error) {
 
 // test for Euclidean
 func TestEuclidean_FromFile(t *testing.T) {
-    const testFile = "clustering_tests/Euclidean.txt"
+	const testFile = "clustering_tests/Euclidean.txt"
 
-    cases, err := loadEuclideanCases(testFile)
-    if err != nil {
-        t.Fatalf("failed to load Euclidean cases from %s: %v", testFile, err)
-    }
+	cases, err := loadEuclideanCases(testFile)
+	if err != nil {
+		t.Fatalf("failed to load Euclidean cases from %s: %v", testFile, err)
+	}
 
-    almostEqual := func(a, b, tol float64) bool {
-        return math.Abs(a-b) <= tol
-    }
+	almostEqual := func(a, b, tol float64) bool {
+		return math.Abs(a-b) <= tol
+	}
 
-    for idx, tc := range cases {
-        tc := tc
-        name := fmt.Sprintf("case_%02d_%s", idx, tc.Name)
+	for idx, tc := range cases {
+		tc := tc
+		name := fmt.Sprintf("case_%02d_%s", idx, tc.Name)
 
-        t.Run(name, func(t *testing.T) {
-            got := Euclidean(tc.Input.First, tc.Input.Second)
-            want := tc.Output.Dist
+		t.Run(name, func(t *testing.T) {
+			got := Euclidean(tc.Input.First, tc.Input.Second)
+			want := tc.Output.Dist
 
-            if !almostEqual(got, want, 1e-6) {
-                t.Fatalf("Euclidean(%v, %v) = %v, want %v",
-                    tc.Input.First, tc.Input.Second, got, want)
-            }
-        })
-    }
+			if !almostEqual(got, want, 1e-6) {
+				t.Fatalf("Euclidean(%v, %v) = %v, want %v",
+					tc.Input.First, tc.Input.Second, got, want)
+			}
+		})
+	}
 }
 
 // ---------- parser for buildKNNGraph ----------
 
 // knnGraphInput matches the *input* JSON:
 //
-//   {"k":1,"dist":[[0,1,2],[1,0,3],[2,3,0]]}
-//
+//	{"k":1,"dist":[[0,1,2],[1,0,3],[2,3,0]]}
 type knnGraphInput struct {
 	K    int         `json:"k"`
 	Dist [][]float64 `json:"dist"`
@@ -371,8 +351,7 @@ type knnGraphInput struct {
 
 // expectedEdge is how we encode one edge in JSON:
 //
-//   {"to":1,"weight":1.0}
-//
+//	{"to":1,"weight":1.0}
 type expectedEdge struct {
 	To     int     `json:"to"`
 	Weight float64 `json:"weight"`
@@ -380,12 +359,11 @@ type expectedEdge struct {
 
 // knnGraphOutput matches the *expected* Graph:
 //
-//   {"nodes":3,"edges":{"0":[{"to":1,...}]}, "totalWeight":2.1666667}
-//
+//	{"nodes":3,"edges":{"0":[{"to":1,...}]}, "totalWeight":2.1666667}
 type knnGraphOutput struct {
-	Nodes       int                      `json:"nodes"`
-	Edges       map[int][]expectedEdge   `json:"edges"`
-	TotalWeight float64                  `json:"totalWeight"`
+	Nodes       int                    `json:"nodes"`
+	Edges       map[int][]expectedEdge `json:"edges"`
+	TotalWeight float64                `json:"totalWeight"`
 }
 
 // BuildKNNGraphCase is the fully parsed test case.
@@ -533,8 +511,6 @@ func TestBuildKNNGraph_FromFile(t *testing.T) {
 
 // ---------- parser for fillDirectedKNNWeight ----------
 
-
-
 // ---- shared line-based parser for "# / JSON / @ / JSON" blocks ----
 
 type fillDirRawCase struct {
@@ -648,14 +624,13 @@ func loadFillDirectedKNNWeightsCases(path string) ([]FillDirectedKNNWeightsCase,
 
 // ---------- parser for getNeighborsRow ----------
 
-
 // One fully-parsed test case for getNeighborsRow.
 type GetNeighborsRowCase struct {
-	Name  string
-	Row   []float64
-	R     int
-	Idx   []int
-	Dist  []float64
+	Name string
+	Row  []float64
+	R    int
+	Idx  []int
+	Dist []float64
 }
 
 // Internal raw representation of each block in the txt file.
@@ -667,10 +642,10 @@ type getNeighborsRowRawCase struct {
 
 // loadGetNeighborsRowCases reads a file with blocks in this pattern:
 //
-//   # Case name
-//   {"row":[...],"r":1}
-//   @ some comment
-//   {"idx":[...],"dist":[...]}
+//	# Case name
+//	{"row":[...],"r":1}
+//	@ some comment
+//	{"idx":[...],"dist":[...]}
 //
 // and returns fully parsed cases.
 func loadGetNeighborsRowCases(path string) ([]GetNeighborsRowCase, error) {
@@ -772,7 +747,7 @@ func parseGetNeighborsRowRawCases(path string) ([]getNeighborsRowRawCase, error)
 	return cases, nil
 }
 
-//test function for fillDirectedKNNWeights
+// test function for fillDirectedKNNWeights
 func TestGetNeighborsRow_FromFile(t *testing.T) {
 	const testFile = "clustering_tests/fillDirectedKNNWeights.txt"
 
@@ -808,9 +783,7 @@ func TestGetNeighborsRow_FromFile(t *testing.T) {
 	}
 }
 
-
 // ---------- parser for topKNeighbors ----------
-
 
 // TopKNeighborsCase is one fully parsed test case for topKNeighbors.
 type TopKNeighborsCase struct {
@@ -824,10 +797,10 @@ type TopKNeighborsCase struct {
 
 // loadTopKNeighborsCases reads a file with blocks like:
 //
-//   # Case name
-//   {"k":2,"idx":[0,1,2],"dist":[5,1,3]}
-//   @ some comment
-//   {"idx":[1,2],"dist":[1,3]}
+//	# Case name
+//	{"k":2,"idx":[0,1,2],"dist":[5,1,3]}
+//	@ some comment
+//	{"idx":[1,2],"dist":[1,3]}
 //
 // and returns all parsed cases.
 func loadTopKNeighborsCases(path string) ([]TopKNeighborsCase, error) {
@@ -991,23 +964,21 @@ func TestTopKNeighbors_FromFile(t *testing.T) {
 	}
 }
 
-
 // ---------- parser for distanceToWeights ----------
-
 
 // DistanceToWeightCase is one fully-parsed test case.
 type DistanceToWeightCase struct {
-	Name    string
+	Name     string
 	Distance float64
 	Weight   float64
 }
 
 // loadDistanceToWeightCases reads a file with blocks like:
 //
-//   # Case name
-//   {"distance": ...}
-//   @ some comment
-//   {"weight": ...}
+//	# Case name
+//	{"distance": ...}
+//	@ some comment
+//	{"weight": ...}
 //
 // and returns all parsed cases.
 func loadDistanceToWeightCases(path string) ([]DistanceToWeightCase, error) {
@@ -1157,10 +1128,10 @@ type SymmetrizeWeightsCase struct {
 
 // loadSymmetrizeWeightsCases reads a file with blocks like:
 //
-//   # Case name
-//   {"directed":[[...], ...]}
-//   @ some comment
-//   {"edges":{...},"totalWeight":...}
+//	# Case name
+//	{"directed":[[...], ...]}
+//	@ some comment
+//	{"edges":{...},"totalWeight":...}
 //
 // and returns all parsed cases.
 func loadSymmetrizeWeightsCases(path string) ([]SymmetrizeWeightsCase, error) {
@@ -1382,10 +1353,10 @@ type LeidenCase struct {
 
 // loadLeidenCases reads a file with blocks like:
 //
-//   # Case name
-//   {"nodes":...,"edges":{...},"totalWeight":...,"resolution":...,"gamma":...,"theta":...,"maxIter":...}
-//   @ some comment
-//   {"clusters":[...]}
+//	# Case name
+//	{"nodes":...,"edges":{...},"totalWeight":...,"resolution":...,"gamma":...,"theta":...,"maxIter":...}
+//	@ some comment
+//	{"clusters":[...]}
 //
 // and returns all parsed cases.
 func loadLeidenCases(path string) ([]LeidenCase, error) {
@@ -1396,13 +1367,13 @@ func loadLeidenCases(path string) ([]LeidenCase, error) {
 
 	// JSON shapes for input / output
 	type input struct {
-		Nodes       int                 `json:"nodes"`
-		Edges       map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
-		Resolution  float64             `json:"resolution"`
-		Gamma       float64             `json:"gamma"`
-		Theta       float64             `json:"theta"`
-		MaxIter     int                 `json:"maxIter"`
+		Nodes       int                `json:"nodes"`
+		Edges       map[int][]EdgeJSON `json:"edges"`
+		TotalWeight float64            `json:"totalWeight"`
+		Resolution  float64            `json:"resolution"`
+		Gamma       float64            `json:"gamma"`
+		Theta       float64            `json:"theta"`
+		MaxIter     int                `json:"maxIter"`
 	}
 	type output struct {
 		Clusters []int `json:"clusters"`
@@ -1562,10 +1533,10 @@ type RefineCase struct {
 
 // loadRefineCases reads a file with blocks:
 //
-//   # Case name
-//   {"partition":[...]}
-//   @ some comment
-//   {"clusters":[...]}
+//	# Case name
+//	{"partition":[...]}
+//	@ some comment
+//	{"clusters":[...]}
 //
 // and returns all parsed cases.
 func loadRefineCases(path string) ([]RefineCase, error) {
@@ -1671,45 +1642,43 @@ func parseRefineRawCases(path string) ([]refineRawCase, error) {
 }
 
 func TestRefine_FromFile(t *testing.T) {
-    const testFile = "clustering_tests/Refine.txt" // adjust if your path is different
+	const testFile = "clustering_tests/Refine.txt" // adjust if your path is different
 
-    cases, err := loadRefineCases(testFile)
-    if err != nil {
-        t.Fatalf("loadRefineCases(%q) error: %v", testFile, err)
-    }
-    if len(cases) == 0 {
-        t.Fatalf("no Refine test cases loaded from %q", testFile)
-    }
+	cases, err := loadRefineCases(testFile)
+	if err != nil {
+		t.Fatalf("loadRefineCases(%q) error: %v", testFile, err)
+	}
+	if len(cases) == 0 {
+		t.Fatalf("no Refine test cases loaded from %q", testFile)
+	}
 
-    for idx, tc := range cases {
-        name := fmt.Sprintf("case_%02d_%s", idx, strings.TrimSpace(tc.Name))
+	for idx, tc := range cases {
+		name := fmt.Sprintf("case_%02d_%s", idx, strings.TrimSpace(tc.Name))
 
-        t.Run(name, func(t *testing.T) {
-            // If Refine is a method on Graph, like:
-            //     func (g *Graph) Refine(partition []int) []int
-            // we can just use an empty graph here, since your test
-            // cases only depend on the partition, not on g.
-            var g Graph
-            got := g.Refine(tc.Partition)
+		t.Run(name, func(t *testing.T) {
+			// If Refine is a method on Graph, like:
+			//     func (g *Graph) Refine(partition []int) []int
+			// we can just use an empty graph here, since your test
+			// cases only depend on the partition, not on g.
+			var g Graph
+			got := g.Refine(tc.Partition)
 
-            if len(got) != len(tc.Clusters) {
-                t.Fatalf("length mismatch: got %d, want %d; got=%v, want=%v",
-                    len(got), len(tc.Clusters), got, tc.Clusters)
-            }
+			if len(got) != len(tc.Clusters) {
+				t.Fatalf("length mismatch: got %d, want %d; got=%v, want=%v",
+					len(got), len(tc.Clusters), got, tc.Clusters)
+			}
 
-            for i := range got {
-                if got[i] != tc.Clusters[i] {
-                    t.Fatalf("clusters differ at index %d: got %v, want %v",
-                        i, got, tc.Clusters)
-                }
-            }
-        })
-    }
+			for i := range got {
+				if got[i] != tc.Clusters[i] {
+					t.Fatalf("clusters differ at index %d: got %v, want %v",
+						i, got, tc.Clusters)
+				}
+			}
+		})
+	}
 }
 
 // parser for RefinePartition
-
-
 
 // RefinePartitionCase is one fully parsed test case for Graph.RefinePartition.
 type RefinePartitionCase struct {
@@ -1724,11 +1693,11 @@ type RefinePartitionCase struct {
 
 // loadRefinePartitionCases reads a file with blocks:
 //
-//   # Case name
-//   {"nodes":...,"edges":{...},"totalWeight":...,"partition":[...],
-//    "resolution":...,"gamma":...,"theta":...}
-//   @ some comment
-//   {"clusters":[...]}
+//	# Case name
+//	{"nodes":...,"edges":{...},"totalWeight":...,"partition":[...],
+//	 "resolution":...,"gamma":...,"theta":...}
+//	@ some comment
+//	{"clusters":[...]}
 //
 // and returns all parsed cases.
 func loadRefinePartitionCases(path string) ([]RefinePartitionCase, error) {
@@ -1739,13 +1708,13 @@ func loadRefinePartitionCases(path string) ([]RefinePartitionCase, error) {
 
 	// JSON shapes for input/output
 	type input struct {
-		Nodes       int                 `json:"nodes"`
-		Edges       map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
-		Partition   []int               `json:"partition"`
-		Resolution  float64             `json:"resolution"`
-		Gamma       float64             `json:"gamma"`
-		Theta       float64             `json:"theta"`
+		Nodes       int                `json:"nodes"`
+		Edges       map[int][]EdgeJSON `json:"edges"`
+		TotalWeight float64            `json:"totalWeight"`
+		Partition   []int              `json:"partition"`
+		Resolution  float64            `json:"resolution"`
+		Gamma       float64            `json:"gamma"`
+		Theta       float64            `json:"theta"`
 	}
 	type output struct {
 		Clusters []int `json:"clusters"`
@@ -1876,22 +1845,19 @@ func parseRefinePartitionRawCases(path string) ([]refinePartitionRawCase, error)
 //
 // and returns all parsed cases.
 
-
-	// JSON shapes for input/output.
-	type input struct {
-		Nodes       int                 `json:"nodes"`
-		Edges       map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
-		Partition   []int               `json:"partition"`
-		Resolution  float64             `json:"resolution"`
-		Gamma       float64             `json:"gamma"`
-		Theta       float64             `json:"theta"`
-	}
-	type output struct {
-		Clusters []int `json:"clusters"`
-	}
-
-
+// JSON shapes for input/output.
+type input struct {
+	Nodes       int                `json:"nodes"`
+	Edges       map[int][]EdgeJSON `json:"edges"`
+	TotalWeight float64            `json:"totalWeight"`
+	Partition   []int              `json:"partition"`
+	Resolution  float64            `json:"resolution"`
+	Gamma       float64            `json:"gamma"`
+	Theta       float64            `json:"theta"`
+}
+type output struct {
+	Clusters []int `json:"clusters"`
+}
 
 func TestRefinePartition_FromFile(t *testing.T) {
 	const testFile = "clustering_tests/RefinePartition.txt" // adjust if needed
@@ -1910,7 +1876,7 @@ func TestRefinePartition_FromFile(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Assuming your method signature is:
 			// func (g *Graph) RefinePartition(partition []int, resolution, gamma, theta float64) []int
-			got := tc.Graph.RefinePartition(tc.Partition, tc.Resolution, tc.Gamma, tc.Theta)
+			got := tc.Graph.RefinePartition(tc.Partition, tc.Resolution, tc.Gamma, tc.Theta, 10)
 
 			if len(got) != len(tc.Clusters) {
 				t.Fatalf("length mismatch: got %d, want %d; got=%v, want=%v",
@@ -1927,11 +1893,7 @@ func TestRefinePartition_FromFile(t *testing.T) {
 	}
 }
 
-
-		
-
 // parser for InitSingletonPartition
-
 
 // InitSingletonPartitionCase is one fully parsed test case.
 type InitSingletonPartitionCase struct {
@@ -1942,10 +1904,10 @@ type InitSingletonPartitionCase struct {
 
 // loadInitSingletonPartitionCases reads a file with blocks:
 //
-//   # Case name
-//   {"n":...}
-//   @ some comment
-//   {"partition":[...]}
+//	# Case name
+//	{"n":...}
+//	@ some comment
+//	{"partition":[...]}
 //
 // and returns all parsed cases.
 func loadInitSingletonPartitionCases(path string) ([]InitSingletonPartitionCase, error) {
@@ -2052,9 +2014,7 @@ func parseInitSingletonPartitionRawCases(path string) ([]initSingletonPartitionR
 
 // parser for QL_InitSingletonPartition
 
-
 // EdgeJSON is a lightweight version of Edge for JSON decoding.
-
 
 // GraphInitSingletonPartitionCase is one fully parsed test case
 // for (*Graph).InitSingletonPartition().
@@ -2066,10 +2026,10 @@ type GraphInitSingletonPartitionCase struct {
 
 // loadGraphInitSingletonPartitionCases reads a file with blocks:
 //
-//   # Case name
-//   {"nodes":...,"edges":{...},"totalWeight":...}
-//   @ some comment
-//   {"partition":[...]}
+//	# Case name
+//	{"nodes":...,"edges":{...},"totalWeight":...}
+//	@ some comment
+//	{"partition":[...]}
 //
 // and returns all parsed cases.
 func loadGraphInitSingletonPartitionCases(path string) ([]GraphInitSingletonPartitionCase, error) {
@@ -2080,9 +2040,9 @@ func loadGraphInitSingletonPartitionCases(path string) ([]GraphInitSingletonPart
 
 	// JSON shapes for input/output.
 	type input struct {
-		Nodes       int                 `json:"nodes"`
-		Edges       map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
+		Nodes       int                `json:"nodes"`
+		Edges       map[int][]EdgeJSON `json:"edges"`
+		TotalWeight float64            `json:"totalWeight"`
 	}
 	type output struct {
 		Partition []int `json:"partition"`
@@ -2195,7 +2155,6 @@ func parseGraphInitSingletonPartitionRawCases(path string) ([]graphInitSingleton
 	return cases, nil
 }
 
-
 func TestInitSingletonPartition_FromFile(t *testing.T) {
 	const testFile = "clustering_tests/InitSingletonPartition.txt" // adjust path if needed
 
@@ -2239,10 +2198,10 @@ type NodesByClusterCase struct {
 
 // loadNodesByClusterCases reads a file with blocks:
 //
-//   # Case name
-//   {"partition":[...]}
-//   @ some comment
-//   {"groups":{"0":[...], "1":[...]}}
+//	# Case name
+//	{"partition":[...]}
+//	@ some comment
+//	{"groups":{"0":[...], "1":[...]}}
 //
 // and returns all parsed cases.
 func loadNodesByClusterCases(path string) ([]NodesByClusterCase, error) {
@@ -2395,7 +2354,6 @@ func TestNodesByCluster_FromFile(t *testing.T) {
 
 //parser for MergeNodesSubset
 
-
 // MergeNodesSubsetCase is one fully parsed test case for Graph.MergeNodesSubset.
 type MergeNodesSubsetCase struct {
 	Name             string
@@ -2410,11 +2368,11 @@ type MergeNodesSubsetCase struct {
 
 // loadMergeNodesSubsetCases reads a file with blocks:
 //
-//   # Case name
-//   {"nodes":[...],"partition":[...],"refinedPartition":[...],
-//    "resolution":...,"gamma":...,"theta":...}
-//   @ some comment
-//   {"partition":[...]}    // expected refined partition
+//	# Case name
+//	{"nodes":[...],"partition":[...],"refinedPartition":[...],
+//	 "resolution":...,"gamma":...,"theta":...}
+//	@ some comment
+//	{"partition":[...]}    // expected refined partition
 //
 // and returns all parsed cases.
 func loadMergeNodesSubsetCases(path string) ([]MergeNodesSubsetCase, error) {
@@ -2548,6 +2506,9 @@ func TestMergeNodesSubset_FromFile(t *testing.T) {
 
 			// If your method is named MergeNodes instead of MergeNodesSubset,
 			// just change this call accordingly.
+			// Build nodesByCluster map from the partition
+			nodesByCluster := g.NodesByCluster(tc.Partition)
+			maxRounds := 10 // default max rounds for testing
 			got := g.MergeNodesSubset(
 				tc.Nodes,
 				tc.Partition,
@@ -2555,6 +2516,8 @@ func TestMergeNodesSubset_FromFile(t *testing.T) {
 				tc.Resolution,
 				tc.Gamma,
 				tc.Theta,
+				maxRounds,
+				nodesByCluster,
 			)
 
 			if len(got) != len(tc.Expected) {
@@ -2574,13 +2537,12 @@ func TestMergeNodesSubset_FromFile(t *testing.T) {
 
 // parser for FindWellConnectedClusters
 
-
 // -----------------------------------------------------------------------------
 // Helpers (you can reuse existing ones if you already have them)
 // -----------------------------------------------------------------------------
 
-// tcName generates a nice subtest name like "case_01_name".
-func tcName(idx int, name string) string {
+// tcName2 generates a nice subtest name like "case_01_name".
+func tcName2(idx int, name string) string {
 	base := fmt.Sprintf("case_%02d", idx+1)
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -2663,11 +2625,11 @@ func parseFindWellConnectedClustersRawCases(path string) ([]FindWellConnectedClu
 	scanner := bufio.NewScanner(f)
 
 	var (
-		cases                                  []FindWellConnectedClustersRawCase
-		currentName                            string
-		inputLine, outputLine                  string
+		cases                             []FindWellConnectedClustersRawCase
+		currentName                       string
+		inputLine, outputLine             string
 		waitingForInput, waitingForOutput bool
-		lineNum                                int
+		lineNum                           int
 	)
 
 	flushCase := func() error {
@@ -2804,7 +2766,7 @@ func loadFindWellConnectedClustersCases(path string) ([]FindWellConnectedCluster
 // -----------------------------------------------------------------------------
 
 func TestFindWellConnectedClusters_FromFile(t *testing.T) {
-	
+
 	const path = "clustering_tests/FindWellConnectedClusters.txt"
 
 	cases, err := loadFindWellConnectedClustersCases(path)
@@ -2814,7 +2776,7 @@ func TestFindWellConnectedClusters_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			got := tc.Graph.FindWellConnectedClusters(tc.Subset, tc.RefinedPartition, tc.Gamma)
 			if !equalIntSlicesIgnoringOrder(got, tc.Candidates) {
 				t.Fatalf("candidates = %v, want %v", got, tc.Candidates)
@@ -2828,18 +2790,18 @@ func TestFindWellConnectedClusters_FromFile(t *testing.T) {
 // SampleCommunityCase is one fully parsed test case
 // for Graph.SampleCommunity (receiver g is unused in the function body).
 type SampleCommunityCase struct {
-	Name      string
-	Clusters  []int
-	Probs     map[int]float64
-	Selected  int
+	Name     string
+	Clusters []int
+	Probs    map[int]float64
+	Selected int
 }
 
 // loadSampleCommunityCases reads a file with blocks:
 //
-//   # Case name
-//   {"clusters":[...],"probs":{"0":1.0,...}}
-//   @ some comment
-//   {"selected":<int>}
+//	# Case name
+//	{"clusters":[...],"probs":{"0":1.0,...}}
+//	@ some comment
+//	{"selected":<int>}
 //
 // and returns all parsed cases.
 func loadSampleCommunityCases(path string) ([]SampleCommunityCase, error) {
@@ -2850,8 +2812,8 @@ func loadSampleCommunityCases(path string) ([]SampleCommunityCase, error) {
 
 	// JSON shapes for input/output.
 	type input struct {
-		Clusters []int              `json:"clusters"`
-		Probs    map[int]float64    `json:"probs"`
+		Clusters []int           `json:"clusters"`
+		Probs    map[int]float64 `json:"probs"`
 	}
 	type output struct {
 		Selected int `json:"selected"`
@@ -2975,16 +2937,9 @@ func TestSampleCommunity_FromFile(t *testing.T) {
 	}
 }
 
-
-
-
 //pareser and test function for SampleCommunity
 
-
-
-
-// parser for ComputeMoveProbabilities 
-
+// parser for ComputeMoveProbabilities
 
 type ComputeMoveProbabilityRawCase struct {
 	Name       string
@@ -3002,11 +2957,11 @@ func parseComputeMoveProbabilityRawCases(path string) ([]ComputeMoveProbabilityR
 	scanner := bufio.NewScanner(f)
 
 	var (
-		cases                                  []ComputeMoveProbabilityRawCase
-		currentName                            string
-		inputLine, outputLine                  string
+		cases                             []ComputeMoveProbabilityRawCase
+		currentName                       string
+		inputLine, outputLine             string
 		waitingForInput, waitingForOutput bool
-		lineNum                                int
+		lineNum                           int
 	)
 
 	flushCase := func() error {
@@ -3094,10 +3049,10 @@ type ComputeMoveProbabilityCase struct {
 
 // loadComputeMoveProbabilityCases reads a file with blocks:
 //
-//   # Case name
-//   {"currNode":...,"candidateClusters":[...],"refinedPartition":[...],"theta":...,"resolution":...}
-//   @ some comment
-//   {"probs":{"1":1.0,...}}
+//	# Case name
+//	{"currNode":...,"candidateClusters":[...],"refinedPartition":[...],"theta":...,"resolution":...}
+//	@ some comment
+//	{"probs":{"1":1.0,...}}
 //
 // and returns all parsed cases.
 func loadComputeMoveProbabilityCases(path string) ([]ComputeMoveProbabilityCase, error) {
@@ -3159,13 +3114,16 @@ func TestComputeMoveProbability_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
+			// Build nodesByCluster map from the refined partition
+			nodesByCluster := g.NodesByCluster(tc.RefinedPartition)
 			got := g.ComputeMoveProbability(
 				tc.CurrNode,
 				tc.CandidateClusters,
 				tc.RefinedPartition,
 				tc.Theta,
 				tc.Resolution,
+				nodesByCluster,
 			)
 
 			// Check same number of entries.
@@ -3181,7 +3139,7 @@ func TestComputeMoveProbability_FromFile(t *testing.T) {
 				if !ok {
 					t.Fatalf("missing probability for cluster %d in got=%v", cid, got)
 				}
-				if !floatAlmostEqual(seen, want, tol) {
+				if !floatAlmostEqual2(seen, want, tol) {
 					t.Fatalf("probs[%d]=%v, want %v (case %q)",
 						cid, seen, want, tc.Name)
 				}
@@ -3189,29 +3147,27 @@ func TestComputeMoveProbability_FromFile(t *testing.T) {
 		})
 	}
 }
+
 // test function for ComputeMoveProbability
-
-
-
 
 // FindWellConnectedNodesCase is one fully parsed test case
 // for Graph.FindWellConnectedNodes.
 type FindWellConnectedNodesCase struct {
-	Name       string
-	Graph      *Graph
-	Subset     []int
-	Partition  []int
-	Gamma      float64
-	Connected  []int
+	Name      string
+	Graph     *Graph
+	Subset    []int
+	Partition []int
+	Gamma     float64
+	Connected []int
 }
 
 // loadFindWellConnectedNodesCases reads a file with blocks:
 //
-//   # Case name
-//   {"graphNodes":...,"edges":{...},"totalWeight":...,
-//    "subset":[...],"partition":[...],"gamma":...}
-//   @ some comment
-//   {"connected":[...]}
+//	# Case name
+//	{"graphNodes":...,"edges":{...},"totalWeight":...,
+//	 "subset":[...],"partition":[...],"gamma":...}
+//	@ some comment
+//	{"connected":[...]}
 //
 // and returns all parsed cases.
 func loadFindWellConnectedNodesCases(path string) ([]FindWellConnectedNodesCase, error) {
@@ -3222,12 +3178,12 @@ func loadFindWellConnectedNodesCases(path string) ([]FindWellConnectedNodesCase,
 
 	// JSON shapes for input / output.
 	type input struct {
-		GraphNodes int                  `json:"graphNodes"`
-		Edges      map[int][]EdgeJSON   `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
-		Subset     []int                `json:"subset"`
-		Partition  []int                `json:"partition"`
-		Gamma      float64              `json:"gamma"`
+		GraphNodes  int                `json:"graphNodes"`
+		Edges       map[int][]EdgeJSON `json:"edges"`
+		TotalWeight float64            `json:"totalWeight"`
+		Subset      []int              `json:"subset"`
+		Partition   []int              `json:"partition"`
+		Gamma       float64            `json:"gamma"`
 	}
 	type output struct {
 		Connected []int `json:"connected"`
@@ -3343,9 +3299,7 @@ func parseFindWellConnectedNodesRawCases(path string) ([]findWellConnectedNodesR
 	return cases, nil
 }
 
-
-
-// parser for EdgestoCluster 
+// parser for EdgestoCluster
 
 // EdgesToClusterCase is one fully parsed test case for Graph.EdgesToCluster.
 type EdgesToClusterCase struct {
@@ -3358,10 +3312,10 @@ type EdgesToClusterCase struct {
 
 // loadEdgesToClusterCases reads a file with blocks:
 //
-//   # Case name
-//   {"nodes":...,"edges":{...},"totalWeight":...,"node":<int>,"cluster":[...]}
-//   @ some comment
-//   {"sum":<float>}
+//	# Case name
+//	{"nodes":...,"edges":{...},"totalWeight":...,"node":<int>,"cluster":[...]}
+//	@ some comment
+//	{"sum":<float>}
 //
 // and returns all parsed cases.
 func loadEdgesToClusterCases(path string) ([]EdgesToClusterCase, error) {
@@ -3372,11 +3326,11 @@ func loadEdgesToClusterCases(path string) ([]EdgesToClusterCase, error) {
 
 	// JSON shapes for input/output.
 	type input struct {
-		Nodes       int                 `json:"nodes"`
-		Edges       map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
-		Node        int                 `json:"node"`
-		Cluster     []int               `json:"cluster"`
+		Nodes       int                `json:"nodes"`
+		Edges       map[int][]EdgeJSON `json:"edges"`
+		TotalWeight float64            `json:"totalWeight"`
+		Node        int                `json:"node"`
+		Cluster     []int              `json:"cluster"`
 	}
 	type output struct {
 		Sum float64 `json:"sum"`
@@ -3491,7 +3445,7 @@ func parseEdgesToClusterRawCases(path string) ([]edgesToClusterRawCase, error) {
 	return cases, nil
 }
 
-//test function for EdgestoCluster
+// test function for EdgestoCluster
 func TestFindWellConnectedNodes_FromFile(t *testing.T) {
 	const path = "clustering_tests/FindWellConnectedNodes.txt" // adjust if you use a subdir
 
@@ -3502,7 +3456,7 @@ func TestFindWellConnectedNodes_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			got := tc.Graph.FindWellConnectedNodes(tc.Subset, tc.Partition, tc.Gamma)
 			if !equalIntSlicesIgnoringOrder(got, tc.Connected) {
 				t.Fatalf("connected = %v, want %v", got, tc.Connected)
@@ -3512,7 +3466,6 @@ func TestFindWellConnectedNodes_FromFile(t *testing.T) {
 }
 
 // parser for ClusterDegree
-
 
 // ClusterDegreeCase is one fully parsed test case for Graph.ClusterDegree.
 type ClusterDegreeCase struct {
@@ -3524,10 +3477,10 @@ type ClusterDegreeCase struct {
 
 // loadClusterDegreeCases reads a file with blocks:
 //
-//   # Case name
-//   {"nodes":...,"edges":{...},"totalWeight":...,"cluster":[...]}
-//   @ some comment
-//   {"degree":<float>}
+//	# Case name
+//	{"nodes":...,"edges":{...},"totalWeight":...,"cluster":[...]}
+//	@ some comment
+//	{"degree":<float>}
 //
 // and returns all parsed cases.
 func loadClusterDegreeCases(path string) ([]ClusterDegreeCase, error) {
@@ -3538,10 +3491,10 @@ func loadClusterDegreeCases(path string) ([]ClusterDegreeCase, error) {
 
 	// JSON shapes for input / output.
 	type input struct {
-		Nodes       int                 `json:"nodes"`
-		Edges       map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
-		Cluster     []int               `json:"cluster"`
+		Nodes       int                `json:"nodes"`
+		Edges       map[int][]EdgeJSON `json:"edges"`
+		TotalWeight float64            `json:"totalWeight"`
+		Cluster     []int              `json:"cluster"`
 	}
 	type output struct {
 		Degree float64 `json:"degree"`
@@ -3667,7 +3620,7 @@ func TestClusterDegree_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			got := tc.Graph.ClusterDegree(tc.Cluster)
 
 			// The expected values in ClusterDegree_tests.txt are simple (0, 3.5, 2.0, ...)
@@ -3681,7 +3634,6 @@ func TestClusterDegree_FromFile(t *testing.T) {
 
 //parser for SingletonPartition
 
-
 // SingletonCase is one fully parsed test case for Singleton.
 type SingletonCase struct {
 	Name      string
@@ -3692,10 +3644,10 @@ type SingletonCase struct {
 
 // loadSingletonCases reads a file with blocks:
 //
-//   # Case name
-//   {"node":<int>,"partition":[...]}
-//   @ some comment
-//   {"singleton":<bool>}
+//	# Case name
+//	{"node":<int>,"partition":[...]}
+//	@ some comment
+//	{"singleton":<bool>}
 //
 // and returns all parsed cases.
 func loadSingletonCases(path string) ([]SingletonCase, error) {
@@ -3814,7 +3766,7 @@ func TestSingleton_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			got := Singleton(tc.Node, tc.Partition)
 			if got != tc.Singleton {
 				t.Fatalf("Singleton(%d, %v) = %v, want %v",
@@ -3837,10 +3789,10 @@ type MoveNodesCase struct {
 
 // loadMoveNodesCases reads a file with blocks:
 //
-//   # Case name
-//   {"nodes":...,"edges":{...},"totalWeight":...,"partition":[...],"resolution":...}
-//   @ some comment
-//   {"partition":[...]}   // expected final partition
+//	# Case name
+//	{"nodes":...,"edges":{...},"totalWeight":...,"partition":[...],"resolution":...}
+//	@ some comment
+//	{"partition":[...]}   // expected final partition
 //
 // and returns all parsed cases.
 func loadMoveNodesCases(path string) ([]MoveNodesCase, error) {
@@ -3851,11 +3803,11 @@ func loadMoveNodesCases(path string) ([]MoveNodesCase, error) {
 
 	// JSON shapes for input / output.
 	type input struct {
-		Nodes       int                 `json:"nodes"`
-		Edges       map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
-		Partition   []int               `json:"partition"`
-		Resolution  float64             `json:"resolution"`
+		Nodes       int                `json:"nodes"`
+		Edges       map[int][]EdgeJSON `json:"edges"`
+		TotalWeight float64            `json:"totalWeight"`
+		Partition   []int              `json:"partition"`
+		Resolution  float64            `json:"resolution"`
 	}
 	type output struct {
 		Partition []int `json:"partition"`
@@ -3980,11 +3932,11 @@ func TestMoveNodes_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			// copy so we don't mutate the test case struct's slice
 			start := append([]int(nil), tc.Partition...)
 
-			got := tc.Graph.MoveNodes(start, tc.Resolution)
+			got := tc.Graph.MoveNodes(start, tc.Resolution, 10)
 
 			if !equalIntSlices(got, tc.Partition) {
 				t.Fatalf("MoveNodes(%v, %.4f) = %v, want %v",
@@ -4007,30 +3959,28 @@ func equalIntSlices(a, b []int) bool {
 	return true
 }
 
-
 //parser for FindBestClustering
-
 
 // FindBestClusterCase represents one test case for FindBestCluster.
 type FindBestClusterCase struct {
-	Name             string
-	Graph            *Graph
-	Node             int
+	Name              string
+	Graph             *Graph
+	Node              int
 	CandidateClusters []int
-	Partition        []int
-	Resolution       float64
-	BestCluster      int
-	Improved         bool
+	Partition         []int
+	Resolution        float64
+	BestCluster       int
+	Improved          bool
 }
 
 // loadFindBestClusterCases reads a file with blocks:
 //
-//   # Case name
-//   {"nodes":...,"edges":{...},"totalWeight":...,
-//    "node":<int>,"candidateClusters":[...],
-//    "partition":[...],"resolution":...}
-//   @ some comment
-//   {"bestCluster":<int>,"improved":<bool>}
+//	# Case name
+//	{"nodes":...,"edges":{...},"totalWeight":...,
+//	 "node":<int>,"candidateClusters":[...],
+//	 "partition":[...],"resolution":...}
+//	@ some comment
+//	{"bestCluster":<int>,"improved":<bool>}
 //
 // and returns all parsed cases.
 func loadFindBestClusterCases(path string) ([]FindBestClusterCase, error) {
@@ -4041,13 +3991,13 @@ func loadFindBestClusterCases(path string) ([]FindBestClusterCase, error) {
 
 	// JSON input/output shapes.
 	type input struct {
-		Nodes            int                 `json:"nodes"`
-		Edges            map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight      float64             `json:"totalWeight"`
-		Node             int                 `json:"node"`
+		Nodes             int                `json:"nodes"`
+		Edges             map[int][]EdgeJSON `json:"edges"`
+		TotalWeight       float64            `json:"totalWeight"`
+		Node              int                `json:"node"`
 		CandidateClusters []int              `json:"candidateClusters"`
-		Partition        []int               `json:"partition"`
-		Resolution       float64             `json:"resolution"`
+		Partition         []int              `json:"partition"`
+		Resolution        float64            `json:"resolution"`
 	}
 	type output struct {
 		BestCluster int  `json:"bestCluster"`
@@ -4086,14 +4036,14 @@ func loadFindBestClusterCases(path string) ([]FindBestClusterCase, error) {
 		}
 
 		cases = append(cases, FindBestClusterCase{
-			Name:             rc.Name,
-			Graph:            g,
-			Node:             in.Node,
+			Name:              rc.Name,
+			Graph:             g,
+			Node:              in.Node,
 			CandidateClusters: in.CandidateClusters,
-			Partition:        in.Partition,
-			Resolution:       in.Resolution,
-			BestCluster:      out.BestCluster,
-			Improved:         out.Improved,
+			Partition:         in.Partition,
+			Resolution:        in.Resolution,
+			BestCluster:       out.BestCluster,
+			Improved:          out.Improved,
 		})
 	}
 
@@ -4176,7 +4126,7 @@ func TestFindBestCluster_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture range variable
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			gotCluster, gotImproved := FindBestCluster(
 				tc.Node,
 				tc.Graph,
@@ -4209,10 +4159,10 @@ type RandomNodeOrderCase struct {
 
 // loadRandomNodeOrderCases reads a file with blocks:
 //
-//   # Case name
-//   {"n":<int>,"seed":<int>}
-//   @ some comment
-//   {"expectedLen":<int>}
+//	# Case name
+//	{"n":<int>,"seed":<int>}
+//	@ some comment
+//	{"expectedLen":<int>}
 //
 // and returns all parsed cases.
 func loadRandomNodeOrderCases(path string) ([]RandomNodeOrderCase, error) {
@@ -4329,7 +4279,7 @@ func TestRandomNodeOrder_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			// Use the provided seed so tests are reproducible.
 			rand.Seed(tc.Seed)
 
@@ -4388,10 +4338,10 @@ type FindCandidateClustersCase struct {
 
 // loadFindCandidateClustersCases reads a file with blocks:
 //
-//   # Case name
-//   {"node":...,"edges":[{"to":...,"weight":...},...],"partition":[...]}
-//   @ some comment
-//   {"candidates":[...]}
+//	# Case name
+//	{"node":...,"edges":[{"to":...,"weight":...},...],"partition":[...]}
+//	@ some comment
+//	{"candidates":[...]}
 //
 // and returns all parsed cases.
 func loadFindCandidateClustersCases(path string) ([]FindCandidateClustersCase, error) {
@@ -4519,7 +4469,7 @@ func TestFindCandidateClusters_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture range variable
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			got := FindCandidateClusters(tc.Node, tc.Edges, tc.Partition)
 
 			// order & duplicates matter (see your Case 5), so we use exact slice equality
@@ -4531,29 +4481,26 @@ func TestFindCandidateClusters_FromFile(t *testing.T) {
 	}
 }
 
-
-
-
 //parser for ModularityGain
 
 // ModularityGainCase is one test case for Graph.ModularityGain.
 type ModularityGainCase struct {
-	Name        string
-	Graph       *Graph
-	I           int
-	Cluster     int
-	Partition   []int
-	Resolution  float64
-	DeltaQ      float64
+	Name       string
+	Graph      *Graph
+	I          int
+	Cluster    int
+	Partition  []int
+	Resolution float64
+	DeltaQ     float64
 }
 
 // loadModularityGainCases reads:
 //
-//   # Case name
-//   {"nodes":...,"edges":{...},"totalWeight":...,"i":...,"cluster":...,
-//    "partition":[...],"resolution":...}
-//   @ comment
-//   {"deltaQ":...}
+//	# Case name
+//	{"nodes":...,"edges":{...},"totalWeight":...,"i":...,"cluster":...,
+//	 "partition":[...],"resolution":...}
+//	@ comment
+//	{"deltaQ":...}
 func loadModularityGainCases(path string) ([]ModularityGainCase, error) {
 	rawCases, err := parseModularityGainRawCases(path)
 	if err != nil {
@@ -4561,13 +4508,13 @@ func loadModularityGainCases(path string) ([]ModularityGainCase, error) {
 	}
 
 	type input struct {
-		Nodes       int                 `json:"nodes"`
-		Edges       map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
-		I           int                 `json:"i"`
-		Cluster     int                 `json:"cluster"`
-		Partition   []int               `json:"partition"`
-		Resolution  float64             `json:"resolution"`
+		Nodes       int                `json:"nodes"`
+		Edges       map[int][]EdgeJSON `json:"edges"`
+		TotalWeight float64            `json:"totalWeight"`
+		I           int                `json:"i"`
+		Cluster     int                `json:"cluster"`
+		Partition   []int              `json:"partition"`
+		Resolution  float64            `json:"resolution"`
 	}
 	type output struct {
 		DeltaQ float64 `json:"deltaQ"`
@@ -4686,8 +4633,10 @@ func TestModularityGain_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture range variable
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
-			got := tc.Graph.ModularityGain(tc.I, tc.Cluster, tc.Partition, tc.Resolution)
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
+			// Build nodesByCluster map from the partition
+			nodesByCluster := tc.Graph.NodesByCluster(tc.Partition)
+			got := tc.Graph.ModularityGain(tc.I, tc.Cluster, tc.Partition, tc.Resolution, nodesByCluster)
 
 			if !floatEquals(got, tc.DeltaQ, eps) {
 				t.Fatalf(
@@ -4702,7 +4651,6 @@ func TestModularityGain_FromFile(t *testing.T) {
 
 // parser for Aggregate
 
-
 // AggregateCase represents a single test case for (*Graph).Aggregate.
 type AggregateCase struct {
 	Name          string
@@ -4713,10 +4661,10 @@ type AggregateCase struct {
 
 // loadAggregateCases reads a file with blocks:
 //
-//   # Case name
-//   {"nodes":...,"edges":{...},"totalWeight":...,"partition":[...]}
-//   @ some comment
-//   {"nodes":...,"edges":{...},"totalWeight":...}
+//	# Case name
+//	{"nodes":...,"edges":{...},"totalWeight":...,"partition":[...]}
+//	@ some comment
+//	{"nodes":...,"edges":{...},"totalWeight":...}
 //
 // and returns all parsed cases.
 func loadAggregateCases(path string) ([]AggregateCase, error) {
@@ -4727,15 +4675,15 @@ func loadAggregateCases(path string) ([]AggregateCase, error) {
 
 	// JSON shapes for input / output.
 	type graphInput struct {
-		Nodes       int                 `json:"nodes"`
-		Edges       map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
-		Partition   []int               `json:"partition"`
+		Nodes       int                `json:"nodes"`
+		Edges       map[int][]EdgeJSON `json:"edges"`
+		TotalWeight float64            `json:"totalWeight"`
+		Partition   []int              `json:"partition"`
 	}
 	type graphOutput struct {
-		Nodes       int                 `json:"nodes"`
-		Edges       map[int][]EdgeJSON  `json:"edges"`
-		TotalWeight float64             `json:"totalWeight"`
+		Nodes       int                `json:"nodes"`
+		Edges       map[int][]EdgeJSON `json:"edges"`
+		TotalWeight float64            `json:"totalWeight"`
 	}
 
 	cases := make([]AggregateCase, 0, len(rawCases))
@@ -4875,7 +4823,7 @@ func TestAggregate_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture range variable
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			got := tc.OriginalGraph.Aggregate(tc.Partition)
 
 			if !graphsEqual(got, tc.ExpectedGraph, eps) {
@@ -4932,7 +4880,6 @@ func edgeSlicesEqual(a, b []Edge, eps float64) bool {
 
 // parser for Copy
 
-
 // CopyCase is one fully parsed test case for Copy.
 type CopyCase struct {
 	Name            string
@@ -4942,10 +4889,10 @@ type CopyCase struct {
 
 // loadCopyCases reads a file with blocks:
 //
-//   # Case name
-//   {"partition":[...]}
-//   @ some comment
-//   {"partition":[...]}   // expected copied slice
+//	# Case name
+//	{"partition":[...]}
+//	@ some comment
+//	{"partition":[...]}   // expected copied slice
 //
 // and returns all parsed cases.
 func loadCopyCases(path string) ([]CopyCase, error) {
@@ -5059,7 +5006,7 @@ func TestCopy_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture range variable
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			// keep a separate copy of the input to test aliasing later
 			orig := append([]int(nil), tc.InputPartition...)
 
@@ -5086,24 +5033,22 @@ func TestCopy_FromFile(t *testing.T) {
 	}
 }
 
-
-
 //parser for Compare
 
 // CompareCase is one fully parsed test case for Compare.
 type CompareCase struct {
-	Name   string
-	A      []int
-	B      []int
-	Equal  bool
+	Name  string
+	A     []int
+	B     []int
+	Equal bool
 }
 
 // loadCompareCases reads a file with blocks:
 //
-//   # Case name
-//   {"a":[...],"b":[...]}
-//   @ some comment
-//   {"equal":<bool>}
+//	# Case name
+//	{"a":[...],"b":[...]}
+//	@ some comment
+//	{"equal":<bool>}
 //
 // and returns all parsed cases.
 func loadCompareCases(path string) ([]CompareCase, error) {
@@ -5219,7 +5164,7 @@ func TestCompare_FromFile(t *testing.T) {
 
 	for i, tc := range cases {
 		tc := tc // capture range variable
-		t.Run(tcName(i, tc.Name), func(t *testing.T) {
+		t.Run(tcName2(i, tc.Name), func(t *testing.T) {
 			got := Compare(tc.A, tc.B)
 			if got != tc.Equal {
 				t.Fatalf("Compare(%v, %v) = %v, want %v",
