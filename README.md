@@ -59,6 +59,8 @@ runApp("app.R")
 
 The Shiny app will open in your default browser at `http://127.0.0.1:XXXX`
 
+Click 'Run Pipeline' button towards the bottom to use the default dataset.
+
 **Features:**
 - Upload custom count matrix CSV files (max 200mb)
 - Adjust QC filters (min/max features, counts, mitochondrial content)
