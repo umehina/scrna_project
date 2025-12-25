@@ -136,3 +136,20 @@ scrna_project/
 - **Leiden algorithm**: Traag, V.A., Waltman, L. & van Eck, N.J. From Louvain to Leiden: guaranteeing well-connected communities. Sci Rep 9, 5233 (2019).
 - **UMAP**: McInnes, L., Healy, J., & Melville, J. (2018). UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction. arXiv:1802.03426.
 - **t-SNE**: van der Maaten, L., & Hinton, G. (2008). Visualizing Data using t-SNE. Journal of Machine Learning Research, 9, 2579-2605.
+
+---
+
+## Code Contributions
+
+| Component            | Contributors |
+|---------------------|--------------|
+| Quality Control     | @umehina |
+| Pearson Residuals   | @halimv |
+| Log Normalization   | @halimv, @umehina |
+| PCA                 | @umehina, @amyji-ui |
+| UMAP                | @amyji-ui |
+| t-SNE               | @amyji-ui, @yinanyinanzhu |
+| KNN Graph           | @halimv, @umehina |
+| Leiden Clustering   | @halimv, @umehina, @amyji-ui |
+| Unit Tests          | @yinanyinanzhu, @amyji-ui, @umehina |
+| R-Shiny App         | @amyji-ui |
