@@ -157,7 +157,7 @@ func mustUnmarshalJSON[T any](t *testing.T, s string) T {
 
 // ========== Test ComputeDistanceMatrix ===============
 func TestComputeDistanceMatrix_FromFile(t *testing.T) {
-	const testFile = "UMAP_tests/computeDistanceMatrix_tests.txt"
+	const testFile = "testdata/umap/computeDistanceMatrix_tests.txt"
 
 	cases, err := parseIOCases(testFile)
 	if err != nil {
@@ -207,7 +207,7 @@ type knnOutput struct {
 }
 
 func TestBuildKNNForUMAP_FromFile(t *testing.T) {
-	const testFile = "UMAP_tests/BuildKNNForUMAP_tests.txt"
+	const testFile = "testdata/umap/BuildKNNForUMAP_tests.txt"
 
 	cases, err := parseIOCases(testFile)
 	if err != nil {
@@ -281,7 +281,7 @@ type rhoSigmaOutput struct {
 }
 
 func TestComputeRhoSigma_FromFile(t *testing.T) {
-	const testFile = "UMAP_tests/computeRhoSigma_tests.txt"
+	const testFile = "testdata/umap/computeRhoSigma_tests.txt"
 
 	cases, err := parseIOCases(testFile)
 	if err != nil {
@@ -326,7 +326,7 @@ type triple struct {
 }
 
 func TestBuildDirectedProbs_FromFile(t *testing.T) {
-	const testFile = "UMAP_tests/buildDirectedProbs_tests.txt"
+	const testFile = "testdata/umap/buildDirectedProbs_tests.txt"
 
 	cases, err := parseIOCases(testFile)
 	if err != nil {
@@ -385,7 +385,7 @@ type fuzzyInput struct {
 }
 
 func TestBuildFuzzyGraph_FromFile(t *testing.T) {
-	const testFile = "UMAP_tests/buildFuzzyGraph_tests.txt"
+	const testFile = "testdata/umap/buildFuzzyGraph_tests.txt"
 
 	cases, err := parseIOCases(testFile)
 	if err != nil {

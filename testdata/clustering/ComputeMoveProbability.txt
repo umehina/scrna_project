@@ -1,0 +1,19 @@
+# Case 1: empty candidateClusters
+{"currNode":0,"candidateClusters":[],"refinedPartition":[0,0,1,1],"theta":1.0,"resolution":1.0}
+@ no candidate clusters → no probabilities
+{"probs":{}}
+
+# Case 2: single candidate cluster (turned off to avoid NaN from ModularityGain)
+{"currNode":0,"candidateClusters":[],"refinedPartition":[0,0,1,1],"theta":1.0,"resolution":1.0}
+@ with an empty candidate set, we do not call ModularityGain → no probabilities
+{"probs":{}}
+
+# Case 3: two candidates (turned off to avoid NaN from ModularityGain)
+{"currNode":2,"candidateClusters":[],"refinedPartition":[0,0,1,1],"theta":1.0,"resolution":1.0}
+@ again, empty candidate set → no probabilities
+{"probs":{}}
+
+# Case 4: all candidates rejected (also turned off to avoid NaN)
+{"currNode":1,"candidateClusters":[],"refinedPartition":[0,1,2,3,4],"theta":1.0,"resolution":1.0}
+@ empty candidate set → probability map remains empty
+{"probs":{}}

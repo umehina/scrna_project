@@ -128,7 +128,7 @@ func floatAlmostEqual2(a, b, tol float64) bool {
 }
 
 func TestDistanceMatrix_FromFile(t *testing.T) {
-	const path = "clustering_tests/DistanceMatrix_tests.txt"
+	const path = "testdata/clustering/DistanceMatrix_tests.txt"
 
 	cases, err := loadIOCasesFromFile(path)
 	if err != nil {
@@ -312,7 +312,7 @@ func loadEuclideanCases(path string) ([]EuclideanCase, error) {
 
 // test for Euclidean
 func TestEuclidean_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/Euclidean.txt"
+	const testFile = "testdata/clustering/Euclidean.txt"
 
 	cases, err := loadEuclideanCases(testFile)
 	if err != nil {
@@ -403,7 +403,7 @@ func loadBuildKNNGraphCases(path string) ([]BuildKNNGraphCase, error) {
 }
 
 func TestBuildKNNGraph_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/buildKNNGraph.txt"
+	const testFile = "testdata/clustering/buildKNNGraph.txt"
 
 	cases, err := loadBuildKNNGraphCases(testFile)
 	if err != nil {
@@ -749,7 +749,7 @@ func parseGetNeighborsRowRawCases(path string) ([]getNeighborsRowRawCase, error)
 
 // test function for fillDirectedKNNWeights
 func TestGetNeighborsRow_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/fillDirectedKNNWeights.txt"
+	const testFile = "testdata/clustering/fillDirectedKNNWeights.txt"
 
 	cases, err := loadGetNeighborsRowCases(testFile)
 	if err != nil {
@@ -911,7 +911,7 @@ func parseTopKNeighborsRawCases(path string) ([]topKRawCase, error) {
 	return cases, nil
 }
 func TestTopKNeighbors_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/topKNeighbors.txt"
+	const testFile = "testdata/clustering/topKNeighbors.txt"
 
 	cases, err := loadTopKNeighborsCases(testFile)
 	if err != nil {
@@ -1083,7 +1083,7 @@ func parseDistanceToWeightRawCases(path string) ([]dtwRawCase, error) {
 }
 
 func TestDistanceToWeight_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/distanceToWeights.txt"
+	const testFile = "testdata/clustering/distanceToWeights.txt"
 
 	cases, err := loadDistanceToWeightCases(testFile)
 	if err != nil {
@@ -1239,7 +1239,7 @@ func parseSymmetrizeWeightsRawCases(path string) ([]symmRawCase, error) {
 }
 
 func TestSymmetrizeWeightsUsing_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/symmetrizeWeightsUsing.txt"
+	const testFile = "testdata/clustering/symmetrizeWeightsUsing.txt"
 
 	cases, err := loadSymmetrizeWeightsCases(testFile)
 	if err != nil {
@@ -1491,7 +1491,7 @@ func parseLeidenRawCases(path string) ([]leidenRawCase, error) {
 }
 
 func TestLeiden_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/Leiden.txt"
+	const testFile = "testdata/clustering/Leiden.txt"
 
 	cases, err := loadLeidenCases(testFile)
 	if err != nil {
@@ -1642,7 +1642,7 @@ func parseRefineRawCases(path string) ([]refineRawCase, error) {
 }
 
 func TestRefine_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/Refine.txt" // adjust if your path is different
+	const testFile = "testdata/clustering/Refine.txt" // adjust if your path is different
 
 	cases, err := loadRefineCases(testFile)
 	if err != nil {
@@ -1860,7 +1860,7 @@ type output struct {
 }
 
 func TestRefinePartition_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/RefinePartition.txt" // adjust if needed
+	const testFile = "testdata/clustering/RefinePartition.txt" // adjust if needed
 
 	cases, err := loadRefinePartitionCases(testFile)
 	if err != nil {
@@ -2156,7 +2156,7 @@ func parseGraphInitSingletonPartitionRawCases(path string) ([]graphInitSingleton
 }
 
 func TestInitSingletonPartition_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/InitSingletonPartition.txt" // adjust path if needed
+	const testFile = "testdata/clustering/InitSingletonPartition.txt" // adjust path if needed
 
 	cases, err := loadInitSingletonPartitionCases(testFile)
 	if err != nil {
@@ -2307,7 +2307,7 @@ func parseNodesByClusterRawCases(path string) ([]nodesByClusterRawCase, error) {
 }
 
 func TestNodesByCluster_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/NodesByCluster.txt" // adjust path if needed
+	const testFile = "testdata/clustering/NodesByCluster.txt" // adjust path if needed
 
 	cases, err := loadNodesByClusterCases(testFile)
 	if err != nil {
@@ -2488,7 +2488,7 @@ func parseMergeNodesSubsetRawCases(path string) ([]mergeNodesSubsetRawCase, erro
 }
 
 func TestMergeNodesSubset_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/MergeNodesSubset.txt" // put those 4 cases here
+	const testFile = "testdata/clustering/MergeNodesSubset.txt" // put those 4 cases here
 
 	cases, err := loadMergeNodesSubsetCases(testFile)
 	if err != nil {
@@ -2767,7 +2767,7 @@ func loadFindWellConnectedClustersCases(path string) ([]FindWellConnectedCluster
 
 func TestFindWellConnectedClusters_FromFile(t *testing.T) {
 
-	const path = "clustering_tests/FindWellConnectedClusters.txt"
+	const path = "testdata/clustering/FindWellConnectedClusters.txt"
 
 	cases, err := loadFindWellConnectedClustersCases(path)
 	if err != nil {
@@ -2909,7 +2909,7 @@ func parseSampleCommunityRawCases(path string) ([]sampleCommunityRawCase, error)
 }
 
 func TestSampleCommunity_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/SampleCommunity.txt"
+	const testFile = "testdata/clustering/SampleCommunity.txt"
 
 	cases, err := loadSampleCommunityCases(testFile)
 	if err != nil {
@@ -3101,7 +3101,7 @@ func loadComputeMoveProbabilityCases(path string) ([]ComputeMoveProbabilityCase,
 // ---------- test for Graph.ComputeMoveProbability ----------
 
 func TestComputeMoveProbability_FromFile(t *testing.T) {
-	const path = "clustering_tests/ComputeMoveProbability.txt"
+	const path = "testdata/clustering/ComputeMoveProbability.txt"
 
 	cases, err := loadComputeMoveProbabilityCases(path)
 	if err != nil {
@@ -3447,7 +3447,7 @@ func parseEdgesToClusterRawCases(path string) ([]edgesToClusterRawCase, error) {
 
 // test function for EdgestoCluster
 func TestFindWellConnectedNodes_FromFile(t *testing.T) {
-	const path = "clustering_tests/FindWellConnectedNodes.txt" // adjust if you use a subdir
+	const path = "testdata/clustering/FindWellConnectedNodes.txt" // adjust if you use a subdir
 
 	cases, err := loadFindWellConnectedNodesCases(path)
 	if err != nil {
@@ -3611,7 +3611,7 @@ func parseClusterDegreeRawCases(path string) ([]clusterDegreeRawCase, error) {
 // ---------- test function for Graph.FindWellConnectedNodes ----------
 
 func TestClusterDegree_FromFile(t *testing.T) {
-	const path = "clustering_tests/ClusterDegree.txt" // adjust path if your file lives elsewhere
+	const path = "testdata/clustering/ClusterDegree.txt" // adjust path if your file lives elsewhere
 
 	cases, err := loadClusterDegreeCases(path)
 	if err != nil {
@@ -3757,7 +3757,7 @@ func parseSingletonRawCases(path string) ([]singletonRawCase, error) {
 //test function for Singleton
 
 func TestSingleton_FromFile(t *testing.T) {
-	const path = "clustering_tests/Singleton.txt" // adjust if you use a subdir
+	const path = "testdata/clustering/Singleton.txt" // adjust if you use a subdir
 
 	cases, err := loadSingletonCases(path)
 	if err != nil {
@@ -3923,7 +3923,7 @@ func parseMoveNodesRawCases(path string) ([]moveNodesRawCase, error) {
 }
 
 func TestMoveNodes_FromFile(t *testing.T) {
-	const path = "clustering_tests/MoveNodes.txt"
+	const path = "testdata/clustering/MoveNodes.txt"
 
 	cases, err := loadMoveNodesCases(path)
 	if err != nil {
@@ -4117,7 +4117,7 @@ func parseFindBestClusterRawCases(path string) ([]findBestClusterRawCase, error)
 }
 
 func TestFindBestCluster_FromFile(t *testing.T) {
-	const path = "clustering_tests/FindBestCluster.txt" // adjust if it's in a subdir
+	const path = "testdata/clustering/FindBestCluster.txt" // adjust if it's in a subdir
 
 	cases, err := loadFindBestClusterCases(path)
 	if err != nil {
@@ -4270,7 +4270,7 @@ func parseRandomNodeOrderRawCases(path string) ([]randomNodeOrderRawCase, error)
 }
 
 func TestRandomNodeOrder_FromFile(t *testing.T) {
-	const path = "clustering_tests/RandomNodeOrder.txt"
+	const path = "testdata/clustering/RandomNodeOrder.txt"
 
 	cases, err := loadRandomNodeOrderCases(path)
 	if err != nil {
@@ -4460,7 +4460,7 @@ func parseFindCandidateClustersRawCases(path string) ([]findCandidateClustersRaw
 }
 
 func TestFindCandidateClusters_FromFile(t *testing.T) {
-	const path = "clustering_tests/FindCandidateCluster.txt" // adjust if you use a subdir
+	const path = "testdata/clustering/FindCandidateCluster.txt" // adjust if you use a subdir
 
 	cases, err := loadFindCandidateClustersCases(path)
 	if err != nil {
@@ -4622,7 +4622,7 @@ func parseModularityGainRawCases(path string) ([]modularityGainRawCase, error) {
 }
 
 func TestModularityGain_FromFile(t *testing.T) {
-	const path = "clustering_tests/ModularityGain.txt" // adjust if the file is in a subdir
+	const path = "testdata/clustering/ModularityGain.txt" // adjust if the file is in a subdir
 
 	cases, err := loadModularityGainCases(path)
 	if err != nil {
@@ -4812,7 +4812,7 @@ func parseAggregateRawCases(path string) ([]aggregateRawCase, error) {
 }
 
 func TestAggregate_FromFile(t *testing.T) {
-	const path = "clustering_tests/Aggregate.txt" // adjust if your file is in a subdir
+	const path = "testdata/clustering/Aggregate.txt" // adjust if your file is in a subdir
 
 	cases, err := loadAggregateCases(path)
 	if err != nil {
@@ -4997,7 +4997,7 @@ func parseCopyRawCases(path string) ([]copyRawCase, error) {
 }
 
 func TestCopy_FromFile(t *testing.T) {
-	const path = "clustering_tests/Copy.txt" // adjust if the file is in a subdir
+	const path = "testdata/clustering/Copy.txt" // adjust if the file is in a subdir
 
 	cases, err := loadCopyCases(path)
 	if err != nil {
@@ -5155,7 +5155,7 @@ func parseCompareRawCases(path string) ([]compareRawCase, error) {
 }
 
 func TestCompare_FromFile(t *testing.T) {
-	const path = "clustering_tests/Compare.txt" // adjust if it's in a subdir
+	const path = "testdata/clustering/Compare.txt" // adjust if it's in a subdir
 
 	cases, err := loadCompareCases(path)
 	if err != nil {

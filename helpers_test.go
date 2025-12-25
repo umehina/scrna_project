@@ -102,7 +102,7 @@ func parseBoolLine(ln string, want int) ([]bool, error) {
 // runFileTests runs tests defined in a file.
 // It takes in a testing.T, test name, tolerance, and a function fn to run for each testSampleBlock.
 func runFileTests(t *testing.T, name string, tol float64, fn func(b testSampleBlock, idx int, tol float64)) {
-	path := filepath.Join(".", "tests", name+".txt")
+	path := filepath.Join(".", "testdata", "helpers", name+".txt")
 	blocks, err := parseTestFile(path)
 	if err != nil {
 		t.Fatalf("parse %s: %v", name, err)

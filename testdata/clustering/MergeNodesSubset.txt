@@ -1,0 +1,19 @@
+# Case 1: no nodes in subset
+{"nodes":[],"partition":[0,0,1,1],"refinedPartition":[0,0,1,1],"resolution":1.0,"gamma":1.0,"theta":0.01}
+@ len(nodes) = 0 → function returns refinedPartition unchanged
+{"partition":[0,0,1,1]}
+
+# Case 2: single node in subset
+{"nodes":[2],"partition":[0,0,1,1],"refinedPartition":[0,0,1,1],"resolution":1.0,"gamma":1.0,"theta":0.01}
+@ len(nodes) = 1 → early return, refinedPartition unchanged
+{"partition":[0,0,1,1]}
+
+# Case 3: multiple nodes, but current implementation does not refine
+{"nodes":[0,1,2,3],"partition":[0,0,1,1],"refinedPartition":[0,0,1,1],"resolution":1.0,"gamma":1.0,"theta":0.01}
+@ len(nodes) > 1 but improved=false → loop never runs, refinedPartition unchanged
+{"partition":[0,0,1,1]}
+
+# Case 4: different refinedPartition, still unchanged
+{"nodes":[0,2],"partition":[0,1,0,1],"refinedPartition":[0,0,2,2],"resolution":1.0,"gamma":1.0,"theta":0.01}
+@ with current code, output must equal refinedPartition argument
+{"partition":[0,0,2,2]}

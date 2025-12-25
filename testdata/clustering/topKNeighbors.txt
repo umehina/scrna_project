@@ -1,0 +1,24 @@
+# Case 1: basic unsorted, k=2
+{"k":2,"idx":[0,1,2],"dist":[5,1,3]}
+@ sort ascending by distance: (1,1), (2,3) are the closest 2
+{"idx":[1,2],"dist":[1,3]}
+
+# Case 2: k equals number of neighbors
+{"k":3,"idx":[0,1,2],"dist":[2,2,1]}
+@ sorted distances: (2,1), (0,2), (1,2)
+{"idx":[2,0,1],"dist":[1,2,2]}
+
+# Case 3: k larger than number of neighbors (should clamp)
+{"k":10,"idx":[0,1,2,3],"dist":[4,3,2,1]}
+@ sorted distances: (3,1), (2,2), (1,3), (0,4); all returned
+{"idx":[3,2,1,0],"dist":[1,2,3,4]}
+
+# Case 4: k = 1, tie distances
+{"k":1,"idx":[0,1,2],"dist":[5,5,1]}
+@ sorted distances: (2,1), then (0,5), (1,5); only first neighbor kept
+{"idx":[2],"dist":[1]}
+
+# Case 5: k = 0 (edge case)
+{"k":0,"idx":[0,1,2],"dist":[1,2,3]}
+@ n[:0] → empty slice
+{"idx":[],"dist":[]}

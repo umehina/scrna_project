@@ -1,0 +1,19 @@
+# Case 1: n = 0
+{"n":0}
+@ no elements → empty partition
+{"partition":[]}
+
+# Case 2: n = 1
+{"n":1}
+@ single element → [0]
+{"partition":[0]}
+
+# Case 3: n = 3
+{"n":3}
+@ each index in its own partition → [0,1,2]
+{"partition":[0,1,2]}
+
+# Case 4: n = 5
+{"n":5}
+@ each index in its own partition → [0,1,2,3,4]
+{"partition":[0,1,2,3,4]}

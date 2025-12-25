@@ -2,6 +2,12 @@
 
 A single-cell RNA-seq analysis pipeline implemented in Go with interactive visualization through R Shiny. The pipeline performs normalization, dimensionality reduction (PCA), embedding (UMAP/t-SNE), and Leiden clustering.
 
+<p align="center">
+  <img src="images/embedding_umap.png" width="45%" />
+  <img src="images/embedding_tsne.png" width="45%" />
+</p>
+<p align="center"><em>Sample output: UMAP and t-SNE embeddings with Leiden clustering</em></p>
+
 ## Prerequisites
 
 ### Go
@@ -107,26 +113,42 @@ Click 'Run Pipeline' button towards the bottom to use the default dataset.
 
 ```
 scrna_project/
-├── main.go                   # Main pipeline entry point
-├── clustering.go             # Leiden clustering implementation
-├── pca.go                    # PCA computation
-├── normalization.go          # Normalization methods
-├── preprocessing.go          # QC and filtering
-├── umap_script.go            # UMAP implementation.
-├── tSNE.go                   # t-SNE package implementation
-├── io.go                     # Data I/O functions
-├── helpers.go                # Helper functions
-├── datatypes.go              # Data structures
-├── app.R                     # Main Shiny app
+├── main.go                      # Main pipeline entry point
+├── clustering.go                # Leiden clustering implementation
+├── clustering_test.go           # Clustering algorithm tests
+├── pca.go                       # PCA computation
+├── normalization.go             # Normalization methods
+├── preprocessing.go             # QC and filtering
+├── umap_script.go               # UMAP implementation
+├── umap_functions_test.go       # UMAP algorithm tests
+├── tSNE.go                      # t-SNE implementation
+├── io.go                        # Data I/O functions
+├── helpers.go                   # Helper functions
+├── helpers_test.go              # Helper function tests
+├── datatypes.go                 # Data structures
+├── plot.go                      # Plotting utilities
+├── umap_parser.go               # UMAP result parsing
 ├── R/
-│   ├── app.R              # Alternative Shiny interface
-│   ├── verify_clustering.R   # Clustering verification
-│   ├── plot_leiden.R         # Leiden plotting utilities
-│   └── visualization.R       # General plotting functions
+│   ├── app.R                    # Shiny web interface
+│   ├── verify_clustering.R      # Clustering verification
+│   ├── plot_leiden.R            # Leiden plotting utilities
+│   ├── visualization.R          # General plotting functions
+│   └── check_umap_params.R      # UMAP parameter validation
 ├── data/
-│   └── scRNA_dataset.csv     # Input count matrix
-├── output/                   # Pipeline output files
-└── README.md                 # This file
+│   ├── scRNA_dataset.csv        # Example input count matrix
+│   ├── datasetExport.py         # Python data export script
+│   └── filtered_feature_bc_matrix.h5  # H5 format data
+├── output/
+│   ├── pca.png                  # PCA visualization
+│   ├── umap.csv / tsne.csv      # Embedding coordinates
+│   ├── leiden_export_*.csv      # Clustering results
+│   └── ...                      # Other pipeline outputs
+├── testdata/
+│   ├── clustering/              # Clustering algorithm test cases
+│   ├── umap/                    # UMAP algorithm test cases
+│   ├── helpers/                 # Helper function test cases
+│   └── misc/                    # Miscellaneous test files
+└── README.md                    # This file
 ```
 
 ---
