@@ -1490,37 +1490,37 @@ func parseLeidenRawCases(path string) ([]leidenRawCase, error) {
 	return cases, nil
 }
 
-// func TestLeiden_FromFile(t *testing.T) {
-// 	const testFile = "clustering_tests/Leiden.txt"
-//
-// 	cases, err := loadLeidenCases(testFile)
-// 	if err != nil {
-// 		t.Fatalf("loadLeidenCases(%q) error: %v", testFile, err)
-// 	}
-// 	if len(cases) == 0 {
-// 		t.Fatalf("no Leiden test cases loaded from %q", testFile)
-// 	}
-//
-// 	for idx, tc := range cases {
-// 		name := fmt.Sprintf("case_%02d_%s", idx, strings.TrimSpace(tc.Name))
-//
-// 		t.Run(name, func(t *testing.T) {
-// 			got := tc.Graph.Leiden(tc.Resolution, tc.Gamma, tc.Theta, tc.MaxIter)
-//
-// 			if len(got) != len(tc.Clusters) {
-// 				t.Fatalf("clusters length mismatch: got %d, want %d; got=%v, want=%v",
-// 					len(got), len(tc.Clusters), got, tc.Clusters)
-// 			}
-//
-// 			for i := range got {
-// 				if got[i] != tc.Clusters[i] {
-// 					t.Fatalf("clusters differ at index %d: got %v, want %v",
-// 						i, got, tc.Clusters)
-// 				}
-// 			}
-// 		})
-// 	}
-// }
+func TestLeiden_FromFile(t *testing.T) {
+	const testFile = "clustering_tests/Leiden.txt"
+
+	cases, err := loadLeidenCases(testFile)
+	if err != nil {
+		t.Fatalf("loadLeidenCases(%q) error: %v", testFile, err)
+	}
+	if len(cases) == 0 {
+		t.Fatalf("no Leiden test cases loaded from %q", testFile)
+	}
+
+	for idx, tc := range cases {
+		name := fmt.Sprintf("case_%02d_%s", idx, strings.TrimSpace(tc.Name))
+
+		t.Run(name, func(t *testing.T) {
+			got := tc.Graph.Leiden(tc.Resolution, tc.Gamma, tc.Theta, tc.MaxIter)
+
+			if len(got) != len(tc.Clusters) {
+				t.Fatalf("clusters length mismatch: got %d, want %d; got=%v, want=%v",
+					len(got), len(tc.Clusters), got, tc.Clusters)
+			}
+
+			for i := range got {
+				if got[i] != tc.Clusters[i] {
+					t.Fatalf("clusters differ at index %d: got %v, want %v",
+						i, got, tc.Clusters)
+				}
+			}
+		})
+	}
+}
 
 // ---------- parser for Refine ----------
 
@@ -2909,7 +2909,7 @@ func parseSampleCommunityRawCases(path string) ([]sampleCommunityRawCase, error)
 }
 
 func TestSampleCommunity_FromFile(t *testing.T) {
-	const testFile = "clustering_tests/sampleCommunity.txt"
+	const testFile = "clustering_tests/SampleCommunity.txt"
 
 	cases, err := loadSampleCommunityCases(testFile)
 	if err != nil {
